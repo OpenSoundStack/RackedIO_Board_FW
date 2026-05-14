@@ -1,0 +1,107 @@
+/dts-v1/;
+#include <st/h7/stm32h723Xg.dtsi>
+#include <st/h7/stm32h723vgtx-pinctrl.dtsi>
+
+/ {
+	model = "OSST Core I RackedIO Board";
+	compatible = "corei,rackedio";
+
+	chosen {
+		zephyr,dtcm = &dtcm;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds: leds {
+		compatible = "gpio-leds";
+
+		red_led: rled {
+			gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+		};
+
+		green_led: gled {
+			gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
+		};
+
+		blue_led: bled {
+			gpios = <&gpioe 7 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	aliases {
+		ledr = &red_led;
+		ledg = &green_led;
+		ledb = &blue_led;
+	};
+};
+
+&clk_hsi48 {
+	status = "okay";
+};
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(25)>;
+	status = "okay";
+};
+
+&pll {
+	div-m = <5>;
+	mul-n = <50>;
+	div-p = <1>;
+	div-q = <2>;
+	div-r = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(250)>;
+	d1cpre = <1>;
+	hpre = <1>;    /* HCLK: 275   MHz */
+	d1ppre = <2>;  /* APB1: 137.5 MHz */
+	d2ppre1 = <2>; /* APB2: 137.5 MHz */
+	d2ppre2 = <2>; /* APB3: 137.5 MHz */
+	d3ppre = <2>;  /* APB4: 137.5 MHz */
+};
+
+&pwr {
+	power-supply = "ldo";
+};
+
+&gpiod {
+	eth_rst {
+		gpio-hog;
+		gpios = <15 GPIO_ACTIVE_HIGH>;
+		output-high;
+	};
+};
+
+&mac {
+	status = "okay";
+	pinctrl-0 = <&eth_ref_clk_pa1
+	             &eth_crs_dv_pa7
+	             &eth_rxd0_pc4
+	             &eth_rxd1_pc5
+	             &eth_tx_en_pb11
+	             &eth_txd0_pb12
+	             &eth_txd1_pb13>;
+	pinctrl-names = "default";
+	phy-connection-type = "rmii";
+	phy-handle = <&eth_phy>;
+};
+
+&mdio {
+	status = "okay";
+	pinctrl-0 = <&eth_mdio_pa2 &eth_mdc_pc1>;
+	pinctrl-names = "default";
+
+	eth_phy: ethernet-phy@0 {
+		compatible = "ethernet-phy";
+		reg = <0>;
+	};
+};
+
+&rng {
+	status = "okay";
+};

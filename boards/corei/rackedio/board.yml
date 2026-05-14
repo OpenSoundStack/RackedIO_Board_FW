@@ -1,0 +1,6 @@
+board:
+  name: rackedio
+  full_name: Core I Racked IO
+  vendor: osst
+  socs:
+    - name: stm32h723xx

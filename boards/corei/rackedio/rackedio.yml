@@ -1,0 +1,12 @@
+identifier: rackedio
+name: OSST Core I RackedIO
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 564
+flash: 1026
+supported:
+  - gpio
+vendor: osst

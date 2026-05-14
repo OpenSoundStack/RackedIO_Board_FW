@@ -1,0 +1,6 @@
+if BOARD_RACKEDIO
+
+configdefault NET_L2_ETHERNET
+	default y
+
+endif
