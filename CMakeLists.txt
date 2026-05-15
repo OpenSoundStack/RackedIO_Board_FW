@@ -21,6 +21,9 @@ target_sources(app PRIVATE
         src/net/EthernetRouter.h
         src/net/EthFiltering.c
         src/net/EthFiltering.h
+        src/net/RingBuffer.cpp
+        src/net/RingBuffer.h
+        src/net/SockSvc.c
 )
 
 target_link_libraries(app PRIVATE oancommon oannetutils)

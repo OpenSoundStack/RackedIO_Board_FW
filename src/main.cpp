@@ -19,7 +19,7 @@ void mapper_rx_entry(void* mapper, void*, void*) {
 
     while (true) {
         nmapper->packet_recv_update();
-        k_msleep(10);
+        k_msleep(100);
     }
 }
 
