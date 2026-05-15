@@ -1,0 +1,3 @@
+[submodule "OpenAudioNetwork"]
+	path = OpenAudioNetwork
+	url = git@github.com:OpenSoundStack/OpenAudioNetwork.git
