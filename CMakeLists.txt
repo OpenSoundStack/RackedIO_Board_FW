@@ -24,6 +24,8 @@ target_sources(app PRIVATE
         src/net/RingBuffer.cpp
         src/net/RingBuffer.h
         src/net/SockSvc.c
+        src/audio/i2s.h
+        src/audio/i2s.cpp
 )
 
 target_link_libraries(app PRIVATE oancommon oannetutils)

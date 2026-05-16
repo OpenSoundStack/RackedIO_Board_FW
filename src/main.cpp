@@ -7,12 +7,17 @@
 
 #include "ihm/rgb.h"
 #include "net/EthernetRouter.h"
+#include "audio/i2s.h"
 
 #include "OpenAudioNetwork/common/NetworkMapper.h"
 
 K_THREAD_STACK_DEFINE(mapper_rx_stack, 2048);
 k_tid_t mapper_rx_th_id;
 k_thread mapper_rx_thread;
+
+K_THREAD_STACK_DEFINE(mapper_tx_stack, 2048);
+k_tid_t mapper_tx_th_id;
+k_thread mapper_tx_thread;
 
 void mapper_rx_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
@@ -23,9 +28,21 @@ void mapper_rx_entry(void* mapper, void*, void*) {
     }
 }
 
+void mapper_tx_entry(void* mapper, void*, void*) {
+    NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
+
+    while (true) {
+        nmapper->packet_send_update();
+        k_msleep(5000);
+    }
+}
+
 int main() {
     init_leds();
     set_led_color(LedColor::YELLOW);
+
+    configure_board_i2s();
+    ll_i2s_start(SPI1);
 
     EthernetRouter* router = EthernetRouter::get_eth_router();
     router->init_router();
@@ -61,9 +78,17 @@ int main() {
         5, 0, K_NO_WAIT
     );
 
+    mapper_tx_th_id = k_thread_create(
+        &mapper_tx_thread,
+        mapper_tx_stack,
+        K_THREAD_STACK_SIZEOF(mapper_tx_stack),
+        &mapper_tx_entry,
+        &nmapper, nullptr, nullptr,
+        5, 0, K_NO_WAIT
+    );
+
     while (true) {
-        nmapper.packet_send_update();
-        k_msleep(5000);
+        k_msleep(100);
     }
 
     return 0;

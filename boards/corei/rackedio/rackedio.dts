@@ -32,6 +32,7 @@
 		ledr = &red_led;
 		ledg = &green_led;
 		ledb = &blue_led;
+		i2s1-rx = &i2s1;
 	};
 };
 

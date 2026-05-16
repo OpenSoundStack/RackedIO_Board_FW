@@ -1,0 +1,11 @@
+source "Kconfig.zephyr"
+
+config APP_LINK_STM32_DRIVERS
+    bool
+    default y
+    select USE_STM32_HAL
+    select USE_STM32_HAL_GPIO
+    select USE_STM32_HAL_SPI
+    select USE_STM32_LL_SPI
+    select USE_STM32_HAL_DMA
+    select USE_STM32_HAL_I2S
