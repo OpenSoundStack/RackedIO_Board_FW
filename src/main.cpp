@@ -19,6 +19,10 @@ K_THREAD_STACK_DEFINE(mapper_tx_stack, 2048);
 k_tid_t mapper_tx_th_id;
 k_thread mapper_tx_thread;
 
+K_THREAD_STACK_DEFINE(life_stack, 512);
+k_tid_t life_th_id;
+k_thread life_thread;
+
 void mapper_rx_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
 
@@ -35,6 +39,19 @@ void mapper_tx_entry(void* mapper, void*, void*) {
         nmapper->packet_send_update();
         k_msleep(5000);
     }
+}
+
+void life_entry(void*, void*, void*) {
+    while (true) {
+        set_led_color(LedColor::CYAN);
+        k_msleep(250);
+        set_led_color(LedColor::PINK);
+        k_msleep(250);
+    }
+}
+
+void dummy() {
+    k_usleep(100);
 }
 
 int main() {
@@ -87,8 +104,26 @@ int main() {
         5, 0, K_NO_WAIT
     );
 
+    life_th_id = k_thread_create(
+        &life_thread,
+        life_stack,
+        K_THREAD_STACK_SIZEOF(life_stack),
+        &life_entry,
+        nullptr, nullptr, nullptr,
+        5, 0, K_NO_WAIT
+    );
+
+    auto* pre1_pipe = get_stream(0);
+    float data[64] = {0};
+    int idx = 0;
+    int color = 0;
+
     while (true) {
-        k_msleep(100);
+        k_pipe_read(pre1_pipe, (uint8_t*)(data + idx), sizeof(float), K_FOREVER);
+        idx++;
+        if (idx == 64) {
+            idx = 0;
+        }
     }
 
     return 0;
