@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <OpenAudioNetwork/netutils/LowLatSocket.h>
+#include <OpenAudioNetwork/common/packet_structs.h>
 
 #include "RingBuffer.h"
 
@@ -38,6 +39,12 @@ public:
 
     int send(uint8_t* data, size_t data_len);
     int recv_data_raw(net_socket_service_event* ev, char* data, size_t len);
+
+    void init_control_ev();
+    void raise_control_ev();
+    void wait_control_ev();
+
+    void read_control_packet(LowLatPacket<ControlPacket>* pck);
 private:
     void install_enet_filters();
     void init_raw_sock();
@@ -47,6 +54,8 @@ private:
 
     int m_sock_eth_if;
     sockaddr_ll m_out_addr;
+
+    k_event m_control_ev;
 };
 
 

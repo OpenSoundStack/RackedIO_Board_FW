@@ -50,9 +50,18 @@ extern "C" void sock_rx_service_handler(net_socket_service_event* ev) {
     auto len = router->recv_data_raw(ev, inbuffer, 300);
     if (len > 0) {
         INT_LLP<300>* data = reinterpret_cast<INT_LLP<300>*>(inbuffer);
+
         for (auto& q : eth_global_queue_buffers) {
-            if (ntohs(data->eth_header.h_proto) == q.get_filt_proto()) {
+            auto proto = q.get_filt_proto();
+
+            if (ntohs(data->eth_header.h_proto) == proto) {
                 q.push_on_buffer((uint8_t*)inbuffer, len);
+
+                if (proto == EthProtocol::ETH_PROTO_OANCONTROL) {
+                    router->raise_control_ev();
+                }
+
+                break;
             }
         }
     }
@@ -68,6 +77,7 @@ void EthernetRouter::install_enet_filters() {
 
 void EthernetRouter::init_router() {
     install_enet_filters();
+    init_control_ev();
     init_queues();
     init_raw_sock();
     init_service();
@@ -126,4 +136,24 @@ int EthernetRouter::recv_data_raw(net_socket_service_event* ev, char *data, size
     [[maybe_unused]] net_socklen_t src_addr_len;
 
     return recvfrom(sock, data, len, 0, &src_addr, &src_addr_len);
+}
+
+void EthernetRouter::init_control_ev() {
+    k_event_init(&m_control_ev);
+}
+
+void EthernetRouter::raise_control_ev() {
+    k_event_post(&m_control_ev, 0x01);
+}
+
+void EthernetRouter::wait_control_ev() {
+    [[maybe_unused]] auto ev_code = k_event_wait_safe(&m_control_ev, 0x01, false, K_FOREVER);
+}
+
+void EthernetRouter::read_control_packet(LowLatPacket<ControlPacket> *pck) {
+    _recv_data(
+        reinterpret_cast<uint8_t*>(pck),
+        sizeof(LowLatPacket<ControlPacket>),
+        EthProtocol::ETH_PROTO_OANCONTROL
+    );
 }

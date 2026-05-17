@@ -11,17 +11,21 @@
 
 #include "OpenAudioNetwork/common/NetworkMapper.h"
 
-K_THREAD_STACK_DEFINE(mapper_rx_stack, 2048);
-k_tid_t mapper_rx_th_id;
-k_thread mapper_rx_thread;
+#define THREAD_DEF(name, stack_size) K_THREAD_STACK_DEFINE(name##_stack, (stack_size)); \
+    k_tid_t name##_th_id; \
+    k_thread name##_thread;
 
-K_THREAD_STACK_DEFINE(mapper_tx_stack, 2048);
-k_tid_t mapper_tx_th_id;
-k_thread mapper_tx_thread;
+#define THREAD_START(name, entry, a, b, c, prio) name##_th_id = k_thread_create( \
+    & name##_thread,\
+    name##_stack, K_THREAD_STACK_SIZEOF(name##_stack), \
+    & entry, \
+    (a), (b), (c), \
+    prio, 0, K_NO_WAIT);
 
-K_THREAD_STACK_DEFINE(life_stack, 512);
-k_tid_t life_th_id;
-k_thread life_thread;
+THREAD_DEF(mapper_rx, 2048);
+THREAD_DEF(mapper_tx, 2048);
+THREAD_DEF(control_handler, 1024);
+THREAD_DEF(life, 512);
 
 void mapper_rx_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
@@ -47,6 +51,39 @@ void life_entry(void*, void*, void*) {
         k_msleep(250);
         set_led_color(LedColor::PINK);
         k_msleep(250);
+    }
+}
+
+void process_gain(const LowLatPacket<ControlPacket>* pck) {
+    if (pck->payload.packet_data.channel >= I2SBoardConfig::max_channels) {
+        return;
+    }
+
+    set_led_color(LedColor::WHITE);
+}
+
+void control_handler_entry(void* self_conf, void*, void*) {
+    auto* pconf = reinterpret_cast<PeerConf*>(self_conf);
+    auto* router = EthernetRouter::get_eth_router();
+    static LowLatPacket<ControlPacket> local_packet;
+
+    while (true) {
+        router->wait_control_ev();
+
+        // We received one control packet
+        // Read it and dispatch it
+        //
+        // We skip the whole Socket infrastructure
+        // beacause we only need to read those
+        // packets
+
+        router->read_control_packet(&local_packet);
+        if ((local_packet.llhdr.dest_uid == pconf->uid) &&
+            (local_packet.payload.header.type == PacketType::CONTROL) &&
+            (local_packet.payload.packet_data.control_type == DataTypes::FLOAT)
+        ) {
+            process_gain(&local_packet);
+        }
     }
 }
 
@@ -86,37 +123,14 @@ int main() {
 
     set_led_color(LedColor::GREEN);
 
-    mapper_rx_th_id = k_thread_create(
-        &mapper_rx_thread,
-        mapper_rx_stack,
-        K_THREAD_STACK_SIZEOF(mapper_rx_stack),
-        &mapper_rx_entry,
-        &nmapper, nullptr, nullptr,
-        5, 0, K_NO_WAIT
-    );
-
-    mapper_tx_th_id = k_thread_create(
-        &mapper_tx_thread,
-        mapper_tx_stack,
-        K_THREAD_STACK_SIZEOF(mapper_tx_stack),
-        &mapper_tx_entry,
-        &nmapper, nullptr, nullptr,
-        5, 0, K_NO_WAIT
-    );
-
-    life_th_id = k_thread_create(
-        &life_thread,
-        life_stack,
-        K_THREAD_STACK_SIZEOF(life_stack),
-        &life_entry,
-        nullptr, nullptr, nullptr,
-        5, 0, K_NO_WAIT
-    );
+    THREAD_START(mapper_rx, mapper_rx_entry, &nmapper, nullptr, nullptr, 5);
+    THREAD_START(mapper_tx, mapper_tx_entry, &nmapper, nullptr, nullptr, 5);
+    THREAD_START(control_handler, control_handler_entry, &pconf, nullptr, nullptr, 2);
+    THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 10);
 
     auto* pre1_pipe = get_stream(0);
     float data[64] = {0};
     int idx = 0;
-    int color = 0;
 
     while (true) {
         k_pipe_read(pre1_pipe, (uint8_t*)(data + idx), sizeof(float), K_FOREVER);
