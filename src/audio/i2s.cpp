@@ -1,10 +1,17 @@
 #include "i2s.h"
 
-static __nocache uint32_t dma_buff[I2SBoardConfig::samples_per_dma_buff];
+static __nocache uint32_t dma_buff[4][I2SBoardConfig::samples_per_dma_buff];
 static k_event packet_process_event;
 
 I2S_HandleTypeDef hi2s1;
+I2S_HandleTypeDef hi2s2;
+I2S_HandleTypeDef hi2s3;
+I2S_HandleTypeDef hi2s6;
+
 DMA_HandleTypeDef hdma_i2s1;
+DMA_HandleTypeDef hdma_i2s2;
+DMA_HandleTypeDef hdma_i2s3;
+DMA_HandleTypeDef hdma_i2s4;
 
 K_THREAD_STACK_DEFINE(audio_proc_stack, 2048);
 k_tid_t audio_proc_th_id;
@@ -50,45 +57,89 @@ void clock_setup_i2s() {
     clk_init.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PIN;
     HAL_RCCEx_PeriphCLKConfig(&clk_init);
 
+    clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI2;
+    HAL_RCCEx_PeriphCLKConfig(&clk_init);
+
+    clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI3;
+    HAL_RCCEx_PeriphCLKConfig(&clk_init);
+
     __HAL_RCC_SPI1_CLK_ENABLE();
+    __HAL_RCC_SPI2_CLK_ENABLE();
+    __HAL_RCC_SPI3_CLK_ENABLE();
 }
 
 void gpio_setup() {
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    /*
+     * Clock => PC9
+     * I2S 1 => PA4, PA5, PA6
+     * I2S 2 => PA11, PB10, PC2
+     * I2S 3 => PC10, PC11, PA15
+     */
 
     GPIO_InitTypeDef gpio_init;
-    gpio_init.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6;
+    gpio_init.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_11;
     gpio_init.Mode = GPIO_MODE_AF_PP;
     gpio_init.Pull = GPIO_NOPULL;
     gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
     gpio_init.Alternate = GPIO_AF5_SPI1;
     HAL_GPIO_Init(GPIOA, &gpio_init);
 
-    gpio_init.Pin = GPIO_PIN_9;
+    gpio_init.Pin = GPIO_PIN_15;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF6_SPI3;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
+
+    gpio_init.Pin = GPIO_PIN_9|GPIO_PIN_2|GPIO_PIN_11|GPIO_PIN_10;
     gpio_init.Mode = GPIO_MODE_AF_PP;
     gpio_init.Pull = GPIO_NOPULL;
     gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
     gpio_init.Alternate = GPIO_AF5_SPI1;
     HAL_GPIO_Init(GPIOC, &gpio_init);
+
+    gpio_init.Pin = GPIO_PIN_11|GPIO_PIN_10;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF6_SPI3;
+    HAL_GPIO_Init(GPIOC, &gpio_init);
+
+    gpio_init.Pin = GPIO_PIN_10;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF5_SPI1;
+    HAL_GPIO_Init(GPIOB, &gpio_init);
+}
+
+void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, I2S_HandleTypeDef* i2s) {
+    hdl.Instance = dma;
+    hdl.Init.Request = rq;
+    hdl.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdl.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdl.Init.MemInc = DMA_MINC_ENABLE;
+    hdl.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdl.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    hdl.Init.Mode = DMA_CIRCULAR;
+    hdl.Init.Priority = DMA_PRIORITY_MEDIUM;
+    hdl.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    HAL_DMA_Init(&hdl);
+
+    __HAL_LINKDMA(i2s, hdmarx, hdl);
 }
 
 void dma_setup() {
     __HAL_RCC_DMA1_CLK_ENABLE();
 
-    hdma_i2s1.Instance = DMA1_Stream0;
-    hdma_i2s1.Init.Request = DMA_REQUEST_SPI1_RX;
-    hdma_i2s1.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_i2s1.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_i2s1.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_i2s1.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
-    hdma_i2s1.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
-    hdma_i2s1.Init.Mode = DMA_CIRCULAR;
-    hdma_i2s1.Init.Priority = DMA_PRIORITY_MEDIUM;
-    hdma_i2s1.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-    HAL_DMA_Init(&hdma_i2s1);
+    init_link_dma(DMA1_Stream0, DMA_REQUEST_SPI1_RX, hdma_i2s1, &hi2s1);
+    init_link_dma(DMA1_Stream1, DMA_REQUEST_SPI2_RX, hdma_i2s2, &hi2s2);
+    init_link_dma(DMA1_Stream2, DMA_REQUEST_SPI3_RX, hdma_i2s3, &hi2s3);
 
-    __HAL_LINKDMA(&hi2s1, hdmarx, hdma_i2s1);
 }
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
@@ -120,8 +171,14 @@ void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
     LL_I2S_SetPrescalerParity(hdl, i2s_odd);
 }
 
-void ll_i2s_start(SPI_TypeDef *hdl) {
-    volatile auto err = HAL_I2S_Receive_DMA(&hi2s1, (uint16_t*)dma_buff, 64*4);
+void ll_i2s_start(I2S_HandleTypeDef *hdl, int index) {
+    HAL_I2S_Receive_DMA(hdl, (uint16_t*)dma_buff[index], 64*4);
+}
+
+void start_i2s_all() {
+    ll_i2s_start(&hi2s1, 0);
+    ll_i2s_start(&hi2s2, 1);
+    ll_i2s_start(&hi2s3, 2);
 }
 
 void irq_setup() {
@@ -142,9 +199,9 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
     while (true) {
         evcode = k_event_wait_safe(kev, I2SEvents::PRE12_EV_HALF | I2SEvents::PRE12_EV_FULL, false, K_FOREVER);
         if (evcode == I2SEvents::PRE12_EV_HALF) {
-            process_buffer(dma_buff, buffer_size, 0, preamps);
+            process_buffer(dma_buff[0], buffer_size, 0, preamps);
         } else if (evcode == I2SEvents::PRE12_EV_FULL) {
-            process_buffer(dma_buff + buffer_size, buffer_size, 0, preamps);
+            process_buffer(dma_buff[0] + buffer_size, buffer_size, 0, preamps);
         }
     }
 }
@@ -191,7 +248,12 @@ void configure_board_i2s(const std::vector<Preamp>* preamps_control) {
     ev_setup(preamps_control);
 
     init_i2s_periph(&hi2s1, SPI1);
+    init_i2s_periph(&hi2s2, SPI2);
+    init_i2s_periph(&hi2s3, SPI3);
+
     ll_i2s_clock_setup(SPI1);
+    ll_i2s_clock_setup(SPI2);
+    ll_i2s_clock_setup(SPI3);
 }
 
 k_pipe *get_stream(const int idx) {

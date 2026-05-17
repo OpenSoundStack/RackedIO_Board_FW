@@ -46,7 +46,9 @@ void configure_board_i2s(const std::vector<Preamp>* preamps_control);
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef* hdl);
 void ll_i2s_clock_setup(SPI_TypeDef* hdl);
-void ll_i2s_start(SPI_TypeDef* hdl);
+void ll_i2s_start(I2S_HandleTypeDef* hdl, int index);
+
+void start_i2s_all();
 
 void process_buffer(uint32_t* base, size_t len, int pre_idx, const std::vector<Preamp>& preamps_control);
 k_pipe* get_stream(int idx);

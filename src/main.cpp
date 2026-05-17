@@ -37,15 +37,18 @@ std::vector<Preamp> preamps_control;
 void mapper_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
 
-    uint16_t last_rx = NetworkMapper::local_now();
-    uint16_t last_tx = NetworkMapper::local_now();
+    uint64_t last_rx = NetworkMapper::local_now();
+    uint64_t last_tx = NetworkMapper::local_now();
     while (true) {
-        if (NetworkMapper::local_now() - last_tx > 5000) {
+        auto now = NetworkMapper::local_now();
+        if (now - last_tx > 5000) {
             nmapper->packet_send_update();
+            last_tx = now;
         }
 
-        if (NetworkMapper::local_now() - last_rx > 100) {
+        if (now - last_rx > 100) {
             nmapper->packet_recv_update();
+            last_rx = now;
         }
 
 
@@ -136,7 +139,7 @@ int main() {
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, get_stream(1), audio_socket, 1);
 
     configure_board_i2s(&preamps_control);
-    ll_i2s_start(SPI1);
+    start_i2s_all();
 
     set_led_color(LedColor::GREEN);
 
