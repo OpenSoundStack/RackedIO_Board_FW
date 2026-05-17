@@ -7,7 +7,10 @@
 
 #include "ihm/rgb.h"
 #include "net/EthernetRouter.h"
+
 #include "audio/i2s.h"
+#include "audio/pre.h"
+#include "audio/pre_phydef.h"
 
 #include "OpenAudioNetwork/common/NetworkMapper.h"
 
@@ -22,35 +25,40 @@
     (a), (b), (c), \
     prio, 0, K_NO_WAIT);
 
-THREAD_DEF(mapper_rx, 2048);
-THREAD_DEF(mapper_tx, 2048);
+THREAD_DEF(mapper, 2048);
 THREAD_DEF(control_handler, 1024);
 THREAD_DEF(life, 512);
 
-void mapper_rx_entry(void* mapper, void*, void*) {
+phy_pre_t pre1 = DT_GET_PREAMP(pre1);
+phy_pre_t pre2 = DT_GET_PREAMP(pre2);
+
+std::vector<Preamp> preamps_control;
+
+void mapper_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
 
+    uint16_t last_rx = NetworkMapper::local_now();
+    uint16_t last_tx = NetworkMapper::local_now();
     while (true) {
-        nmapper->packet_recv_update();
+        if (NetworkMapper::local_now() - last_tx > 5000) {
+            nmapper->packet_send_update();
+        }
+
+        if (NetworkMapper::local_now() - last_rx > 100) {
+            nmapper->packet_recv_update();
+        }
+
+
         k_msleep(100);
-    }
-}
-
-void mapper_tx_entry(void* mapper, void*, void*) {
-    NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
-
-    while (true) {
-        nmapper->packet_send_update();
-        k_msleep(5000);
     }
 }
 
 void life_entry(void*, void*, void*) {
     while (true) {
         set_led_color(LedColor::CYAN);
-        k_msleep(250);
+        k_msleep(500);
         set_led_color(LedColor::PINK);
-        k_msleep(250);
+        k_msleep(500);
     }
 }
 
@@ -59,7 +67,10 @@ void process_gain(const LowLatPacket<ControlPacket>* pck) {
         return;
     }
 
-    set_led_color(LedColor::WHITE);
+    volatile float raw_gain = 0.0f;
+    memcpy((void*)&raw_gain, &pck->payload.packet_data.data[0], sizeof(float));
+
+    preamps_control[pck->payload.packet_data.channel].update_gain(raw_gain);
 }
 
 void control_handler_entry(void* self_conf, void*, void*) {
@@ -95,9 +106,6 @@ int main() {
     init_leds();
     set_led_color(LedColor::YELLOW);
 
-    configure_board_i2s();
-    ll_i2s_start(SPI1);
-
     EthernetRouter* router = EthernetRouter::get_eth_router();
     router->init_router();
 
@@ -114,30 +122,33 @@ int main() {
     pconf.uid = 10;
     memcpy(pconf.dev_name, dev_name, 32);
 
-    NetworkMapper nmapper = NetworkMapper(pconf);
-    if (!nmapper.init_mapper("")) {
+    std::shared_ptr<NetworkMapper> nmapper = std::make_shared<NetworkMapper>(pconf);
+    if (!nmapper->init_mapper("")) {
         set_led_color(LedColor::RED);
 
         return 0;
     }
 
+    auto audio_socket = std::make_shared<LowLatSocket>(pconf.uid, nmapper);
+    audio_socket->init_socket("", EthProtocol::ETH_PROTO_OANAUDIO);
+
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, get_stream(0), audio_socket, 0);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, get_stream(1), audio_socket, 1);
+
+    configure_board_i2s(&preamps_control);
+    ll_i2s_start(SPI1);
+
     set_led_color(LedColor::GREEN);
 
-    THREAD_START(mapper_rx, mapper_rx_entry, &nmapper, nullptr, nullptr, 5);
-    THREAD_START(mapper_tx, mapper_tx_entry, &nmapper, nullptr, nullptr, 5);
-    THREAD_START(control_handler, control_handler_entry, &pconf, nullptr, nullptr, 2);
-    THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 10);
-
-    auto* pre1_pipe = get_stream(0);
-    float data[64] = {0};
-    int idx = 0;
+    THREAD_START(mapper, mapper_entry, nmapper.get(), nullptr, nullptr, 15);
+    THREAD_START(control_handler, control_handler_entry, &pconf, nullptr, nullptr, 5);
+    THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 20);
 
     while (true) {
-        k_pipe_read(pre1_pipe, (uint8_t*)(data + idx), sizeof(float), K_FOREVER);
-        idx++;
-        if (idx == 64) {
-            idx = 0;
+        for (auto& pre : preamps_control) {
+            pre.process_stream();
         }
+        k_usleep(100);
     }
 
     return 0;

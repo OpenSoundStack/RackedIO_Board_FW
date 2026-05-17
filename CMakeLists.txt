@@ -26,6 +26,9 @@ target_sources(app PRIVATE
         src/net/SockSvc.c
         src/audio/i2s.h
         src/audio/i2s.cpp
+        src/audio/pre.h
+        src/audio/pre.cpp
+        src/audio/pre_phydef.h
 )
 
 target_link_libraries(app PRIVATE oancommon oannetutils)

@@ -11,7 +11,7 @@ k_tid_t audio_proc_th_id;
 k_thread audio_proc_thread;
 
 k_pipe channel_audio_streams[I2SBoardConfig::max_channels];
-__nocache float channel_buffers[8][AUDIO_DATA_SAMPLES_PER_PACKETS * 4]; // Buffer up to 4 packets
+__nocache float channel_buffers[8][AUDIO_DATA_SAMPLES_PER_PACKETS * 8]; // Buffer up to 4 packets
 
 // From ST driver
 static unsigned int div_round_closest(uint32_t dividend, uint32_t divisor) {
@@ -97,7 +97,7 @@ void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
     i2s_hdl->Init.Standard = I2S_STANDARD_MSB;
     i2s_hdl->Init.DataFormat = I2S_DATAFORMAT_24B;
     i2s_hdl->Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
-    i2s_hdl->Init.AudioFreq = I2S_AUDIOFREQ_192K;
+    i2s_hdl->Init.AudioFreq = I2S_AUDIOFREQ_96K;
     i2s_hdl->Init.CPOL = I2S_CPOL_LOW;
     i2s_hdl->Init.FirstBit = I2S_FIRSTBIT_MSB;
     i2s_hdl->Init.WSInversion = I2S_WS_INVERSION_DISABLE;
@@ -114,7 +114,7 @@ void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
 
     uint8_t i2s_div = div_round_closest(freq_in, bit_clk_target_freq);
     uint8_t i2s_odd = (i2s_div & 0x1) ? 1 : 0;
-    i2s_div >>= 2; // Multiply by 4 because what the fuck
+    i2s_div >>= 1;
 
     LL_I2S_SetPrescalerLinear(hdl, i2s_div);
     LL_I2S_SetPrescalerParity(hdl, i2s_odd);
@@ -132,35 +132,39 @@ void irq_setup() {
     irq_enable(SPI1_IRQn);
 }
 
-static void audio_processor_entry(void* ev, void*, void*) {
+static void audio_processor_entry(void* ev, void* pre, void*) {
     constexpr size_t buffer_size = I2SBoardConfig::samples_per_dma_buff / 2;
 
     uint32_t evcode = 0;
     k_event* kev = reinterpret_cast<k_event *>(ev);
+    const std::vector<Preamp>& preamps = *(reinterpret_cast<const std::vector<Preamp>*>(pre));
 
     while (true) {
         evcode = k_event_wait_safe(kev, I2SEvents::PRE12_EV_HALF | I2SEvents::PRE12_EV_FULL, false, K_FOREVER);
         if (evcode == I2SEvents::PRE12_EV_HALF) {
-            process_buffer(dma_buff, buffer_size, 0);
+            process_buffer(dma_buff, buffer_size, 0, preamps);
         } else if (evcode == I2SEvents::PRE12_EV_FULL) {
-            process_buffer(dma_buff + buffer_size, buffer_size, 1);
+            process_buffer(dma_buff + buffer_size, buffer_size, 0, preamps);
         }
     }
 }
 
-void process_buffer(uint32_t *base, size_t len, int pre_idx) {
+void process_buffer(uint32_t *base, size_t len, int pre_idx, const std::vector<Preamp>& preamps_control) {
     constexpr float rerange_coef = 1.0f / (1 << 23);
 
+    float digital_gain_1 = preamps_control[pre_idx].get_digital_gain();
+    float digital_gain_2 = preamps_control[pre_idx + 1].get_digital_gain();
+
     for (int i = 0; i < len; i += 2) {
-        float sample_a = static_cast<float>(sign_extend_24_32(base[i])) * rerange_coef;
-        float sample_b = static_cast<float>(sign_extend_24_32(base[i])) * rerange_coef;
+        float sample_a = static_cast<float>(sign_extend_24_32(base[i])) * rerange_coef * digital_gain_1;
+        float sample_b = static_cast<float>(sign_extend_24_32(base[i + 1])) * rerange_coef * digital_gain_2;
 
         k_pipe_write(&channel_audio_streams[pre_idx], (uint8_t*)&sample_a, sizeof(float), K_NO_WAIT);
         k_pipe_write(&channel_audio_streams[pre_idx + 1], (uint8_t*)&sample_b, sizeof(float), K_NO_WAIT);
     }
 }
 
-void ev_setup() {
+void ev_setup(const std::vector<Preamp>* preamps_control) {
     int i = 0;
     for (auto& p : channel_audio_streams) {
         k_pipe_init(&p, (uint8_t*)channel_buffers[i], AUDIO_DATA_SAMPLES_PER_PACKETS * 4);
@@ -174,17 +178,17 @@ void ev_setup() {
         audio_proc_stack,
         K_THREAD_STACK_SIZEOF(audio_proc_stack),
         &audio_processor_entry,
-        &packet_process_event, nullptr, nullptr,
-        0, 0, K_NO_WAIT
+        &packet_process_event, (void*)preamps_control, nullptr,
+        -5, 0, K_NO_WAIT
     );
 }
 
-void configure_board_i2s() {
+void configure_board_i2s(const std::vector<Preamp>* preamps_control) {
     clock_setup_i2s();
     gpio_setup();
     dma_setup();
     irq_setup();
-    ev_setup();
+    ev_setup(preamps_control);
 
     init_i2s_periph(&hi2s1, SPI1);
     ll_i2s_clock_setup(SPI1);

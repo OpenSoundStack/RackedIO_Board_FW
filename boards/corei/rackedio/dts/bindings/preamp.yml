@@ -1,0 +1,21 @@
+compatible: "preamp"
+description: Preamp Control Node
+
+child-binding:
+  description: Core I Racked IO Preamp Control node
+  properties:
+    b0:
+      type: phandle-array
+      specifier-space: gpio
+      required: true
+      description: Gain control bit 0
+    b1:
+      type: phandle-array
+      specifier-space: gpio
+      required: true
+      description: Gain control bit 1
+    phantom:
+      type: phandle-array
+      specifier-space: gpio
+      required: true
+      description: Phantom Power supply enable

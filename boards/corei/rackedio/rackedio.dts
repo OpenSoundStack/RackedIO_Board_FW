@@ -28,11 +28,29 @@
 		};
 	};
 
+	preamps: preamps {
+		compatible = "preamp";
+
+		pre1: pre1 {
+			b0 = <&gpioe 2 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpioe 6 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+		};
+
+		pre2: pre2 {
+			b0 = <&gpioe 4 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpioe 3 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpioe 5 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
 	aliases {
 		ledr = &red_led;
 		ledg = &green_led;
 		ledb = &blue_led;
 		i2s1-rx = &i2s1;
+		pre1 = &pre1;
+		pre2 = &pre2;
 	};
 };
 
@@ -47,7 +65,7 @@
 
 &pll {
 	div-m = <5>;
-	mul-n = <50>;
+	mul-n = <100>;
 	div-p = <1>;
 	div-q = <2>;
 	div-r = <2>;
@@ -57,9 +75,9 @@
 
 &rcc {
 	clocks = <&pll>;
-	clock-frequency = <DT_FREQ_M(250)>;
+	clock-frequency = <DT_FREQ_M(500)>;
 	d1cpre = <1>;
-	hpre = <1>;    /* HCLK: 275   MHz */
+	hpre = <2>;    /* HCLK: 250   MHz */
 	d1ppre = <2>;  /* APB1: 137.5 MHz */
 	d2ppre1 = <2>; /* APB2: 137.5 MHz */
 	d2ppre2 = <2>; /* APB3: 137.5 MHz */

@@ -17,6 +17,8 @@
 
 #include "common/packet_structs.h"
 
+#include "pre.h"
+
 /**
  *
  * TAKING OVER ZEPHYR DRIVERS AND USING I2S&DMA BARE METAL
@@ -39,14 +41,14 @@ void gpio_setup();
 void clock_setup_i2s();
 void dma_setup();
 void irq_setup();
-void ev_setup();
-void configure_board_i2s();
+void ev_setup(const std::vector<Preamp>* preamps_control);
+void configure_board_i2s(const std::vector<Preamp>* preamps_control);
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef* hdl);
 void ll_i2s_clock_setup(SPI_TypeDef* hdl);
 void ll_i2s_start(SPI_TypeDef* hdl);
 
-void process_buffer(uint32_t* base, size_t len, int pre_idx);
+void process_buffer(uint32_t* base, size_t len, int pre_idx, const std::vector<Preamp>& preamps_control);
 k_pipe* get_stream(int idx);
 
 #endif //RACKEDIO_BOARD_FIRMWARE_I2S_H
