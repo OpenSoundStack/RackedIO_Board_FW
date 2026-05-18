@@ -31,6 +31,10 @@ THREAD_DEF(life, 512);
 
 phy_pre_t pre1 = DT_GET_PREAMP(pre1);
 phy_pre_t pre2 = DT_GET_PREAMP(pre2);
+phy_pre_t pre3 = DT_GET_PREAMP(pre3);
+phy_pre_t pre4 = DT_GET_PREAMP(pre4);
+phy_pre_t pre5 = DT_GET_PREAMP(pre5);
+phy_pre_t pre6 = DT_GET_PREAMP(pre6);
 
 std::vector<Preamp> preamps_control;
 
@@ -137,6 +141,10 @@ int main() {
 
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, get_stream(0), audio_socket, 0);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, get_stream(1), audio_socket, 1);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, get_stream(2), audio_socket, 2);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, get_stream(3), audio_socket, 3);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, get_stream(4), audio_socket, 4);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, get_stream(5), audio_socket, 5);
 
     configure_board_i2s(&preamps_control);
     start_i2s_all();

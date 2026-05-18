@@ -31,23 +31,31 @@ static inline int32_t sign_extend_24_32(uint32_t x) {
     return (x ^ m) - m;
 }
 
-void dma_isr(void*) {
-    HAL_DMA_IRQHandler(&hdma_i2s1);
+void dma_isr(void* handle) {
+    HAL_DMA_IRQHandler(reinterpret_cast<DMA_HandleTypeDef *>(handle));
 }
 
-void spi1_isr(void*) {
-    HAL_I2S_IRQHandler(&hi2s1);
+void spi1_isr(void* handle) {
+    HAL_I2S_IRQHandler(reinterpret_cast<I2S_HandleTypeDef *>(handle));
 }
 
 extern "C" void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef* hdl) {
     if (hdl == &hi2s1) {
         k_event_post(&packet_process_event, I2SEvents::PRE12_EV_FULL);
+    } else if (hdl == &hi2s2) {
+        k_event_post(&packet_process_event, I2SEvents::PRE34_EV_FULL);
+    } else if (hdl == &hi2s3) {
+        k_event_post(&packet_process_event, I2SEvents::PRE56_EV_FULL);
     }
 }
 
 extern "C" void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef* hdl) {
     if (hdl == &hi2s1) {
         k_event_post(&packet_process_event, I2SEvents::PRE12_EV_HALF);
+    } else if (hdl == &hi2s2) {
+        k_event_post(&packet_process_event, I2SEvents::PRE34_EV_HALF);
+    } else if (hdl == &hi2s3) {
+        k_event_post(&packet_process_event, I2SEvents::PRE56_EV_HALF);
     }
 }
 
@@ -182,11 +190,23 @@ void start_i2s_all() {
 }
 
 void irq_setup() {
-    IRQ_CONNECT(DMA1_Stream0_IRQn, 0, dma_isr, nullptr, 0);
+    IRQ_CONNECT(DMA1_Stream0_IRQn, 0, dma_isr, &hdma_i2s1, 0);
     irq_enable(DMA1_Stream0_IRQn);
 
-    IRQ_CONNECT(SPI1_IRQn, 0, spi1_isr, nullptr, 0);
+    IRQ_CONNECT(DMA1_Stream1_IRQn, 0, dma_isr, &hdma_i2s2, 0);
+    irq_enable(DMA1_Stream1_IRQn);
+
+    IRQ_CONNECT(DMA1_Stream2_IRQn, 0, dma_isr, &hdma_i2s3, 0);
+    irq_enable(DMA1_Stream2_IRQn);
+
+    IRQ_CONNECT(SPI1_IRQn, 0, spi1_isr, &hi2s1, 0);
     irq_enable(SPI1_IRQn);
+
+    IRQ_CONNECT(SPI2_IRQn, 0, spi1_isr, &hi2s2, 0);
+    irq_enable(SPI2_IRQn);
+
+    IRQ_CONNECT(SPI3_IRQn, 0, spi1_isr, &hi2s3, 0);
+    irq_enable(SPI3_IRQn);
 }
 
 static void audio_processor_entry(void* ev, void* pre, void*) {
@@ -197,11 +217,29 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
     const std::vector<Preamp>& preamps = *(reinterpret_cast<const std::vector<Preamp>*>(pre));
 
     while (true) {
-        evcode = k_event_wait_safe(kev, I2SEvents::PRE12_EV_HALF | I2SEvents::PRE12_EV_FULL, false, K_FOREVER);
-        if (evcode == I2SEvents::PRE12_EV_HALF) {
+        evcode = k_event_wait_safe(kev, 0xFFFFFFFF, false, K_FOREVER);
+        if (evcode & I2SEvents::PRE12_EV_HALF) {
             process_buffer(dma_buff[0], buffer_size, 0, preamps);
-        } else if (evcode == I2SEvents::PRE12_EV_FULL) {
+        }
+
+        if (evcode & I2SEvents::PRE12_EV_FULL) {
             process_buffer(dma_buff[0] + buffer_size, buffer_size, 0, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE34_EV_HALF) {
+            process_buffer(dma_buff[1], buffer_size, 2, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE34_EV_FULL) {
+            process_buffer(dma_buff[1] + buffer_size, buffer_size, 2, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE56_EV_HALF) {
+            process_buffer(dma_buff[2], buffer_size, 4, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE56_EV_FULL) {
+            process_buffer(dma_buff[2] + buffer_size, buffer_size, 4, preamps);
         }
     }
 }
@@ -224,7 +262,7 @@ void process_buffer(uint32_t *base, size_t len, int pre_idx, const std::vector<P
 void ev_setup(const std::vector<Preamp>* preamps_control) {
     int i = 0;
     for (auto& p : channel_audio_streams) {
-        k_pipe_init(&p, (uint8_t*)channel_buffers[i], AUDIO_DATA_SAMPLES_PER_PACKETS * 4);
+        k_pipe_init(&p, (uint8_t*)channel_buffers[i], AUDIO_DATA_SAMPLES_PER_PACKETS * 8);
         i++;
     }
 

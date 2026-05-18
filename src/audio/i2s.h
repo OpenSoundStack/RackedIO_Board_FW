@@ -34,7 +34,11 @@ namespace I2SBoardConfig {
 
 enum I2SEvents : uint32_t {
     PRE12_EV_HALF = (1),
-    PRE12_EV_FULL = (1 << 1)
+    PRE12_EV_FULL = (1 << 1),
+    PRE34_EV_HALF = (1 << 2),
+    PRE34_EV_FULL = (1 << 3),
+    PRE56_EV_HALF = (1 << 4),
+    PRE56_EV_FULL = (1 << 5),
 };
 
 void gpio_setup();
