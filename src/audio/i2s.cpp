@@ -11,7 +11,7 @@ I2S_HandleTypeDef hi2s6;
 DMA_HandleTypeDef hdma_i2s1;
 DMA_HandleTypeDef hdma_i2s2;
 DMA_HandleTypeDef hdma_i2s3;
-DMA_HandleTypeDef hdma_i2s4;
+DMA_HandleTypeDef hdma_i2s6;
 
 K_THREAD_STACK_DEFINE(audio_proc_stack, 2048);
 k_tid_t audio_proc_th_id;
@@ -71,9 +71,18 @@ void clock_setup_i2s() {
     clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI3;
     HAL_RCCEx_PeriphCLKConfig(&clk_init);
 
+    /*
+    clk_init = {0};
+    clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI6;
+    HAL_RCCEx_PeriphCLKConfig(&clk_init);
+    */
+
+    __HAL_RCC_SPI6_CONFIG((RCC_D3CCIPR_SPI6SEL_1 | RCC_D3CCIPR_SPI6SEL_2));
+
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_SPI2_CLK_ENABLE();
     __HAL_RCC_SPI3_CLK_ENABLE();
+    __HAL_RCC_SPI6_CLK_ENABLE();
 }
 
 void gpio_setup() {
@@ -86,10 +95,11 @@ void gpio_setup() {
      * I2S 1 => PA4, PA5, PA6
      * I2S 2 => PA11, PB10, PC2
      * I2S 3 => PC10, PC11, PA15
+     * I2S 6 => PA0, PB4, PC12
      */
 
     GPIO_InitTypeDef gpio_init;
-    gpio_init.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_11;
+    gpio_init.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_11|GPIO_PIN_0;
     gpio_init.Mode = GPIO_MODE_AF_PP;
     gpio_init.Pull = GPIO_NOPULL;
     gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
@@ -103,7 +113,7 @@ void gpio_setup() {
     gpio_init.Alternate = GPIO_AF6_SPI3;
     HAL_GPIO_Init(GPIOA, &gpio_init);
 
-    gpio_init.Pin = GPIO_PIN_9|GPIO_PIN_2|GPIO_PIN_11|GPIO_PIN_10;
+    gpio_init.Pin = GPIO_PIN_9|GPIO_PIN_2|GPIO_PIN_12;
     gpio_init.Mode = GPIO_MODE_AF_PP;
     gpio_init.Pull = GPIO_NOPULL;
     gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
@@ -117,6 +127,13 @@ void gpio_setup() {
     gpio_init.Alternate = GPIO_AF6_SPI3;
     HAL_GPIO_Init(GPIOC, &gpio_init);
 
+    gpio_init.Pin = GPIO_PIN_4;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF8_SPI6;
+    HAL_GPIO_Init(GPIOB, &gpio_init);
+
     gpio_init.Pin = GPIO_PIN_10;
     gpio_init.Mode = GPIO_MODE_AF_PP;
     gpio_init.Pull = GPIO_NOPULL;
@@ -125,7 +142,7 @@ void gpio_setup() {
     HAL_GPIO_Init(GPIOB, &gpio_init);
 }
 
-void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, I2S_HandleTypeDef* i2s) {
+static void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, I2S_HandleTypeDef* i2s) {
     hdl.Instance = dma;
     hdl.Init.Request = rq;
     hdl.Init.Direction = DMA_PERIPH_TO_MEMORY;
@@ -143,11 +160,12 @@ void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, I2S_
 
 void dma_setup() {
     __HAL_RCC_DMA1_CLK_ENABLE();
+    __HAL_RCC_BDMA_CLK_ENABLE();
 
     init_link_dma(DMA1_Stream0, DMA_REQUEST_SPI1_RX, hdma_i2s1, &hi2s1);
     init_link_dma(DMA1_Stream1, DMA_REQUEST_SPI2_RX, hdma_i2s2, &hi2s2);
     init_link_dma(DMA1_Stream2, DMA_REQUEST_SPI3_RX, hdma_i2s3, &hi2s3);
-
+    init_link_dma((DMA_Stream_TypeDef*)BDMA_Channel0, BDMA_REQUEST_SPI6_RX, hdma_i2s6, &hi2s6);
 }
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
@@ -164,6 +182,12 @@ void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
     i2s_hdl->Init.MasterKeepIOState = I2S_MASTER_KEEP_IO_STATE_DISABLE;
 
     HAL_I2S_Init(i2s_hdl);
+
+    // Forcing some parameter because of ST HAL bugs
+    if (hdl == SPI6) {
+        LL_I2S_SetStandard(SPI6, LL_I2S_STANDARD_MSB);
+        LL_I2S_SetDataFormat(SPI6, LL_I2S_DATAFORMAT_24B);
+    }
 }
 
 void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
@@ -187,6 +211,7 @@ void start_i2s_all() {
     ll_i2s_start(&hi2s1, 0);
     ll_i2s_start(&hi2s2, 1);
     ll_i2s_start(&hi2s3, 2);
+    ll_i2s_start(&hi2s6, 3);
 }
 
 void irq_setup() {
@@ -199,6 +224,9 @@ void irq_setup() {
     IRQ_CONNECT(DMA1_Stream2_IRQn, 0, dma_isr, &hdma_i2s3, 0);
     irq_enable(DMA1_Stream2_IRQn);
 
+    IRQ_CONNECT(BDMA_Channel0_IRQn, 0, dma_isr, &hdma_i2s6, 0);
+    irq_enable(BDMA_Channel0_IRQn);
+
     IRQ_CONNECT(SPI1_IRQn, 0, spi1_isr, &hi2s1, 0);
     irq_enable(SPI1_IRQn);
 
@@ -207,6 +235,9 @@ void irq_setup() {
 
     IRQ_CONNECT(SPI3_IRQn, 0, spi1_isr, &hi2s3, 0);
     irq_enable(SPI3_IRQn);
+
+    IRQ_CONNECT(SPI6_IRQn, 0, spi1_isr, &hi2s6, 0);
+    irq_enable(SPI6_IRQn);
 }
 
 static void audio_processor_entry(void* ev, void* pre, void*) {
@@ -288,10 +319,12 @@ void configure_board_i2s(const std::vector<Preamp>* preamps_control) {
     init_i2s_periph(&hi2s1, SPI1);
     init_i2s_periph(&hi2s2, SPI2);
     init_i2s_periph(&hi2s3, SPI3);
+    init_i2s_periph(&hi2s6, SPI6);
 
     ll_i2s_clock_setup(SPI1);
     ll_i2s_clock_setup(SPI2);
     ll_i2s_clock_setup(SPI3);
+    ll_i2s_clock_setup(SPI6);
 }
 
 k_pipe *get_stream(const int idx) {

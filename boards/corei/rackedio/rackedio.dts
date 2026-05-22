@@ -66,6 +66,18 @@
 			b1 = <&gpiod 5 GPIO_ACTIVE_HIGH>;
 			phantom = <&gpiod 7 GPIO_ACTIVE_HIGH>;
 		};
+
+		pre7: pre7 {
+			b0 = <&gpiod 10 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpiod 8 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpiod 9 GPIO_ACTIVE_HIGH>;
+		};
+
+		pre8: pre8 {
+			b0 = <&gpiod 12 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpiod 11 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpiod 13 GPIO_ACTIVE_HIGH>;
+		};
 	};
 
 	aliases {
@@ -79,6 +91,8 @@
 		pre4 = &pre4;
 		pre5 = &pre5;
 		pre6 = &pre6;
+		pre7 = &pre7;
+		pre8 = &pre8;
 	};
 };
 
