@@ -147,8 +147,8 @@ int main() {
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, get_stream(3), audio_socket, 3);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, get_stream(4), audio_socket, 4);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, get_stream(5), audio_socket, 5);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, get_stream(6), audio_socket, 6);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, get_stream(7), audio_socket, 7);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, get_stream(6), audio_socket, 6);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, get_stream(7), audio_socket, 7);
 
     configure_board_i2s(&preamps_control);
     start_i2s_all();

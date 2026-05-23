@@ -10,6 +10,7 @@
 #include <stm32h7xx_ll_gpio.h>
 #include <stm32h7xx_ll_bus.h>
 #include <stm32h7xx_ll_dma.h>
+#include <stm32h7xx_ll_bdma.h>
 
 #include <stm32_ll_spi.h>
 #include <stm32_ll_rcc.h>
@@ -39,6 +40,8 @@ enum I2SEvents : uint32_t {
     PRE34_EV_FULL = (1 << 3),
     PRE56_EV_HALF = (1 << 4),
     PRE56_EV_FULL = (1 << 5),
+    PRE78_EV_HALF = (1 << 6),
+    PRE78_EV_FULL = (1 << 7),
 };
 
 void gpio_setup();

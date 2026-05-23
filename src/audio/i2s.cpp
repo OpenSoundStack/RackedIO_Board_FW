@@ -1,6 +1,7 @@
 #include "i2s.h"
 
-static __nocache uint32_t dma_buff[4][I2SBoardConfig::samples_per_dma_buff];
+static __nocache uint32_t dma_buff[3][I2SBoardConfig::samples_per_dma_buff];
+static __attribute__((section("SRAM4"))) uint32_t bdma_buff[I2SBoardConfig::samples_per_dma_buff];
 static k_event packet_process_event;
 
 I2S_HandleTypeDef hi2s1;
@@ -46,6 +47,8 @@ extern "C" void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef* hdl) {
         k_event_post(&packet_process_event, I2SEvents::PRE34_EV_FULL);
     } else if (hdl == &hi2s3) {
         k_event_post(&packet_process_event, I2SEvents::PRE56_EV_FULL);
+    } else if (hdl == &hi2s6) {
+        k_event_post(&packet_process_event, I2SEvents::PRE78_EV_FULL);
     }
 }
 
@@ -56,6 +59,8 @@ extern "C" void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef* hdl) {
         k_event_post(&packet_process_event, I2SEvents::PRE34_EV_HALF);
     } else if (hdl == &hi2s3) {
         k_event_post(&packet_process_event, I2SEvents::PRE56_EV_HALF);
+    } else if (hdl == &hi2s6) {
+        k_event_post(&packet_process_event, I2SEvents::PRE78_EV_HALF);
     }
 }
 
@@ -71,13 +76,7 @@ void clock_setup_i2s() {
     clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI3;
     HAL_RCCEx_PeriphCLKConfig(&clk_init);
 
-    /*
-    clk_init = {0};
-    clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI6;
-    HAL_RCCEx_PeriphCLKConfig(&clk_init);
-    */
-
-    __HAL_RCC_SPI6_CONFIG((RCC_D3CCIPR_SPI6SEL_1 | RCC_D3CCIPR_SPI6SEL_2));
+    __HAL_RCC_SPI6_CONFIG((RCC_D3CCIPR_SPI6SEL_1 | RCC_D3CCIPR_SPI6SEL_2)); // SPI6 CLK to I2S Clk
 
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_SPI2_CLK_ENABLE();
@@ -166,6 +165,7 @@ void dma_setup() {
     init_link_dma(DMA1_Stream1, DMA_REQUEST_SPI2_RX, hdma_i2s2, &hi2s2);
     init_link_dma(DMA1_Stream2, DMA_REQUEST_SPI3_RX, hdma_i2s3, &hi2s3);
     init_link_dma((DMA_Stream_TypeDef*)BDMA_Channel0, BDMA_REQUEST_SPI6_RX, hdma_i2s6, &hi2s6);
+    //init_link_bdma(LL_BDMA_CHANNEL_0, BDMA_REQUEST_SPI6_RX, hdma_i2s6, &hi2s6);
 }
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
@@ -185,8 +185,10 @@ void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
 
     // Forcing some parameter because of ST HAL bugs
     if (hdl == SPI6) {
+        LL_I2S_SetTransferMode(SPI6, LL_I2S_MODE_MASTER_RX);
         LL_I2S_SetStandard(SPI6, LL_I2S_STANDARD_MSB);
         LL_I2S_SetDataFormat(SPI6, LL_I2S_DATAFORMAT_24B);
+        LL_I2S_SetClockPolarity(SPI6, LL_I2S_POLARITY_LOW);
     }
 }
 
@@ -204,7 +206,11 @@ void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
 }
 
 void ll_i2s_start(I2S_HandleTypeDef *hdl, int index) {
-    HAL_I2S_Receive_DMA(hdl, (uint16_t*)dma_buff[index], 64*4);
+    if (hdl->Instance == SPI6) {
+        HAL_I2S_Receive_DMA(hdl, (uint16_t*)bdma_buff, 64*4);
+    } else {
+        HAL_I2S_Receive_DMA(hdl, (uint16_t*)dma_buff[index], 64*4);
+    }
 }
 
 void start_i2s_all() {
@@ -271,6 +277,14 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
 
         if (evcode & I2SEvents::PRE56_EV_FULL) {
             process_buffer(dma_buff[2] + buffer_size, buffer_size, 4, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE78_EV_HALF) {
+            process_buffer(bdma_buff, buffer_size, 6, preamps);
+        }
+
+        if (evcode & I2SEvents::PRE78_EV_FULL) {
+            process_buffer(bdma_buff + buffer_size, buffer_size, 6, preamps);
         }
     }
 }
