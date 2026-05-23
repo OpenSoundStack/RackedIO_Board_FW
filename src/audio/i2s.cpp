@@ -26,12 +26,6 @@ static unsigned int div_round_closest(uint32_t dividend, uint32_t divisor) {
     return (dividend + (divisor / 2U)) / divisor;
 }
 
-static inline int32_t sign_extend_24_32(uint32_t x) {
-    const int bits = 24;
-    uint32_t m = 1u << (bits - 1);
-    return (x ^ m) - m;
-}
-
 void dma_isr(void* handle) {
     HAL_DMA_IRQHandler(reinterpret_cast<DMA_HandleTypeDef *>(handle));
 }
