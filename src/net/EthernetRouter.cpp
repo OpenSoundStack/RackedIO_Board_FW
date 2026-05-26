@@ -76,6 +76,8 @@ void EthernetRouter::install_enet_filters() {
 }
 
 void EthernetRouter::init_router() {
+    m_netif = net_if_get_default();
+
     install_enet_filters();
     init_control_ev();
     init_queues();

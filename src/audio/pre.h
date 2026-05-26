@@ -4,8 +4,10 @@
 #include <cstdint>
 
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/net/net_pkt.h>
 
 #include "pre_phydef.h"
+#include "src/net/EthernetRouter.h"
 
 #include <OpenAudioNetwork/common/packet_structs.h>
 #include <OpenAudioNetwork/netutils/LowLatSocket.h>
@@ -45,12 +47,13 @@ private:
     void send_audio_packet(int idx, uint8_t dest);
 
     std::shared_ptr<LowLatSocket> m_audio_socket;
+    EthernetRouter* m_router;
 
     AnalogDigitalGain m_ad_gain_value;
     const phy_pre_t* m_pre_io;
     k_pipe* m_stream;
 
-    AudioPacket m_packets[2];
+    LowLatPacket<AudioPacket> m_packets[2];
     int m_sample_index;
     int m_buffer_index;
 

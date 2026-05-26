@@ -26,6 +26,12 @@ static unsigned int div_round_closest(uint32_t dividend, uint32_t divisor) {
     return (dividend + (divisor / 2U)) / divisor;
 }
 
+static inline int32_t sign_extend_24_32(uint32_t x) {
+    const int bits = 24;
+    uint32_t m = 1u << (bits - 1);
+    return (x ^ m) - m;
+}
+
 void dma_isr(void* handle) {
     HAL_DMA_IRQHandler(reinterpret_cast<DMA_HandleTypeDef *>(handle));
 }
@@ -313,7 +319,7 @@ void ev_setup(const std::vector<Preamp>* preamps_control) {
         K_THREAD_STACK_SIZEOF(audio_proc_stack),
         &audio_processor_entry,
         &packet_process_event, (void*)preamps_control, nullptr,
-        -5, 0, K_NO_WAIT
+        -10, 0, K_NO_WAIT
     );
 }
 

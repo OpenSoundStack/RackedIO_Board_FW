@@ -22,6 +22,8 @@ Preamp::Preamp(
     m_audio_socket = audio_socket;
     m_channel = channel;
 
+    m_router = EthernetRouter::get_eth_router();
+
     init_audio_packets();
 }
 
@@ -62,7 +64,7 @@ void Preamp::apply_to_io() {
 void Preamp::process_stream() {
     auto ret = k_pipe_read(
         m_stream,
-        reinterpret_cast<uint8_t*>(m_packets[m_buffer_index].packet_data.samples + m_sample_index),
+        reinterpret_cast<uint8_t*>(m_packets[m_buffer_index].payload.packet_data.samples + m_sample_index),
         AUDIO_DATA_SAMPLES_PER_PACKETS * sizeof(float),
         K_NO_WAIT
     );
@@ -71,7 +73,7 @@ void Preamp::process_stream() {
         int read_sample_count = ret / 4;
         m_sample_index = (m_sample_index + read_sample_count) % AUDIO_DATA_SAMPLES_PER_PACKETS;
         if (m_sample_index == 0) {
-            send_audio_packet(m_buffer_index, 100);
+            send_audio_packet(m_buffer_index,  100);
             m_buffer_index = (m_buffer_index + 1) % 2;
         }
     }
@@ -79,17 +81,20 @@ void Preamp::process_stream() {
 
 void Preamp::init_audio_packets() {
     for (int i = 0; i < 2; i++) {
-        m_packets[i].header.type = PacketType::AUDIO;
-        m_packets[i].header.version = 0;
-        m_packets[i].header.timestamp = 0;
-        m_packets[i].header.prev_delay = 0;
-        m_packets[i].header.flags = 0;
+        m_packets[i].payload.header.type = PacketType::AUDIO;
+        m_packets[i].payload.header.version = 0;
+        m_packets[i].payload.header.timestamp = 0;
+        m_packets[i].payload.header.prev_delay = 0;
+        m_packets[i].payload.header.flags = 0;
 
-        m_packets[i].packet_data.channel = m_channel;
-        m_packets[i].packet_data.source_channel = 0;
+        m_audio_socket->format_packet_header((uint8_t*)&m_packets[i], 0, sizeof(LowLatPacket<AudioPacket>));
+
+        m_packets[i].payload.packet_data.channel = m_channel;
+        m_packets[i].payload.packet_data.source_channel = 0;
     }
 }
 
 void Preamp::send_audio_packet(int idx, uint8_t dest) {
-    m_audio_socket->send_data(m_packets[idx], dest);
+    m_audio_socket->write_packet_mac_addr((uint8_t*)&m_packets[idx], dest);
+    m_audio_socket->send_data_raw((char*)&m_packets[idx], sizeof(LowLatPacket<AudioPacket>));
 }

@@ -151,18 +151,18 @@ int main() {
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, get_stream(7), audio_socket, 7);
 
     configure_board_i2s(&preamps_control);
-    start_i2s_all();
-
     set_led_color(LedColor::GREEN);
 
     THREAD_START(mapper, mapper_entry, nmapper.get(), nullptr, nullptr, 15);
     THREAD_START(control_handler, control_handler_entry, &pconf, nullptr, nullptr, 5);
     THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 20);
 
+    start_i2s_all();
     while (true) {
         for (auto& pre : preamps_control) {
             pre.process_stream();
         }
+
         k_usleep(100);
     }
 

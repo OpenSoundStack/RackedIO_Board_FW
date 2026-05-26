@@ -56,6 +56,7 @@ private:
     sockaddr_ll m_out_addr;
 
     k_event m_control_ev;
+    net_if* m_netif;
 };
 
 
