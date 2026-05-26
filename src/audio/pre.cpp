@@ -95,6 +95,7 @@ void Preamp::init_audio_packets() {
 }
 
 void Preamp::send_audio_packet(int idx, uint8_t dest) {
-    m_audio_socket->write_packet_mac_addr((uint8_t*)&m_packets[idx], dest);
-    m_audio_socket->send_data_raw((char*)&m_packets[idx], sizeof(LowLatPacket<AudioPacket>));
+    if (m_audio_socket->write_packet_mac_addr((uint8_t*)&m_packets[idx], dest)) {
+        m_audio_socket->send_data_raw((char*)&m_packets[idx], sizeof(LowLatPacket<AudioPacket>));
+    }
 }
