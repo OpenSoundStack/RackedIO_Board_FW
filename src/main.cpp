@@ -54,6 +54,7 @@ void mapper_entry(void* mapper, void*, void*) {
 
         if (now - last_rx > 100) {
             nmapper->packet_recv_update();
+            nmapper->mapper_update();
             last_rx = now;
         }
 
