@@ -95,7 +95,7 @@ void control_handler_entry(void* self_conf, void*, void*) {
         // Read it and dispatch it
         //
         // We skip the whole Socket infrastructure
-        // beacause we only need to read those
+        // because we only need to read those
         // packets
 
         router->read_control_packet(&local_packet);
