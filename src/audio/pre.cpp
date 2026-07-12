@@ -3,7 +3,6 @@
 Preamp::Preamp(
     AnalogDigitalGain init_gain,
     const phy_pre_t* pre_io,
-    k_pipe* stream,
     std::shared_ptr<LowLatSocket> audio_socket,
     uint8_t channel
 ) {
@@ -13,8 +12,6 @@ Preamp::Preamp(
     gpio_pin_configure_dt(&pre_io->b0, GPIO_OUTPUT_INACTIVE);
     gpio_pin_configure_dt(&pre_io->b1, GPIO_OUTPUT_INACTIVE);
     gpio_pin_configure_dt(&pre_io->en_48v, GPIO_OUTPUT_INACTIVE);
-
-    m_stream = stream;
 
     m_sample_index = 0;
     m_buffer_index = 0;
@@ -61,22 +58,13 @@ void Preamp::apply_to_io() {
     gpio_pin_set_dt(&m_pre_io->b1, m_ad_gain_value.analog_gain & 0x02);
 }
 
-void Preamp::process_stream() {
-    auto ret = k_pipe_read(
-        m_stream,
-        reinterpret_cast<uint8_t*>(m_packets[m_buffer_index].payload.packet_data.samples + m_sample_index),
-        AUDIO_DATA_SAMPLES_PER_PACKETS * sizeof(float),
-        K_NO_WAIT
-    );
+void Preamp::fire_audio_packet() {
+    send_audio_packet(m_buffer_index, 100);
+    m_buffer_index = (m_buffer_index + 1) % 2;
+}
 
-    if (ret > 0) {
-        int read_sample_count = ret / 4;
-        m_sample_index = (m_sample_index + read_sample_count) % AUDIO_DATA_SAMPLES_PER_PACKETS;
-        if (m_sample_index == 0) {
-            send_audio_packet(m_buffer_index,  100);
-            m_buffer_index = (m_buffer_index + 1) % 2;
-        }
-    }
+float *Preamp::get_audio_buffer() {
+    return m_packets[m_buffer_index].payload.packet_data.samples;
 }
 
 void Preamp::init_audio_packets() {

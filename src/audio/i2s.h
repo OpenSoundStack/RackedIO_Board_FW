@@ -48,8 +48,8 @@ void gpio_setup();
 void clock_setup_i2s();
 void dma_setup();
 void irq_setup();
-void ev_setup(const std::vector<Preamp>* preamps_control);
-void configure_board_i2s(const std::vector<Preamp>* preamps_control);
+void ev_setup(std::vector<Preamp>* preamps_control);
+void configure_board_i2s(std::vector<Preamp>* preamps_control);
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef* hdl);
 void ll_i2s_clock_setup(SPI_TypeDef* hdl);
@@ -57,7 +57,7 @@ void ll_i2s_start(I2S_HandleTypeDef* hdl, int index);
 
 void start_i2s_all();
 
-void process_buffer(uint32_t* base, size_t len, int pre_idx, const std::vector<Preamp>& preamps_control);
+void process_buffer(uint32_t* base, size_t len, int pre_idx, std::vector<Preamp>& preamps_control);
 k_pipe* get_stream(int idx);
 
 #endif //RACKEDIO_BOARD_FIRMWARE_I2S_H

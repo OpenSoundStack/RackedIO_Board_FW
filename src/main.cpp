@@ -108,10 +108,6 @@ void control_handler_entry(void* self_conf, void*, void*) {
     }
 }
 
-void dummy() {
-    k_usleep(100);
-}
-
 int main() {
     init_leds();
     set_led_color(LedColor::YELLOW);
@@ -142,14 +138,14 @@ int main() {
     auto audio_socket = std::make_shared<LowLatSocket>(pconf.uid, nmapper);
     audio_socket->init_socket("", EthProtocol::ETH_PROTO_OANAUDIO);
 
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, get_stream(0), audio_socket, 0);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, get_stream(1), audio_socket, 1);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, get_stream(2), audio_socket, 2);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, get_stream(3), audio_socket, 3);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, get_stream(4), audio_socket, 4);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, get_stream(5), audio_socket, 5);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, get_stream(6), audio_socket, 6);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, get_stream(7), audio_socket, 7);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, audio_socket, 0);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, audio_socket, 1);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, audio_socket, 2);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, audio_socket, 3);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, audio_socket, 4);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, audio_socket, 5);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, audio_socket, 6);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, audio_socket, 7);
 
     configure_board_i2s(&preamps_control);
     set_led_color(LedColor::GREEN);
@@ -159,12 +155,9 @@ int main() {
     THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 20);
 
     start_i2s_all();
-    while (true) {
-        for (auto& pre : preamps_control) {
-            pre.process_stream();
-        }
 
-        k_usleep(100);
+    while (true) {
+        k_usleep(10000000);
     }
 
     return 0;

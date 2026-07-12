@@ -18,9 +18,6 @@ K_THREAD_STACK_DEFINE(audio_proc_stack, 2048);
 k_tid_t audio_proc_th_id;
 k_thread audio_proc_thread;
 
-k_pipe channel_audio_streams[I2SBoardConfig::max_channels];
-__nocache float channel_buffers[8][AUDIO_DATA_SAMPLES_PER_PACKETS * 8]; // Buffer up to 4 packets
-
 // From ST driver
 static unsigned int div_round_closest(uint32_t dividend, uint32_t divisor) {
     return (dividend + (divisor / 2U)) / divisor;
@@ -214,10 +211,21 @@ void ll_i2s_start(I2S_HandleTypeDef *hdl, int index) {
 }
 
 void start_i2s_all() {
+    // We delay the I2S inits to ensure the ISR will hit at different moments
+    // thus we should not forge packet at, or almost at, the same time. That way,
+    // the ethernet controller can breathe.
+
     ll_i2s_start(&hi2s1, 0);
+    k_usleep(100);
+
     ll_i2s_start(&hi2s2, 1);
+    k_usleep(100);
+
     ll_i2s_start(&hi2s3, 2);
+    k_usleep(100);
+
     ll_i2s_start(&hi2s6, 3);
+    k_usleep(100);
 }
 
 void irq_setup() {
@@ -251,7 +259,7 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
 
     uint32_t evcode = 0;
     k_event* kev = reinterpret_cast<k_event *>(ev);
-    const std::vector<Preamp>& preamps = *(reinterpret_cast<const std::vector<Preamp>*>(pre));
+    std::vector<Preamp>& preamps = *(reinterpret_cast<std::vector<Preamp>*>(pre));
 
     while (true) {
         evcode = k_event_wait_safe(kev, 0xFFFFFFFF, false, K_FOREVER);
@@ -289,28 +297,28 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
     }
 }
 
-void process_buffer(uint32_t *base, size_t len, int pre_idx, const std::vector<Preamp>& preamps_control) {
+void process_buffer(uint32_t *base, size_t len, int pre_idx, std::vector<Preamp>& preamps_control) {
     constexpr float rerange_coef = 1.0f / (1 << 23);
 
-    float digital_gain_1 = preamps_control[pre_idx].get_digital_gain();
-    float digital_gain_2 = preamps_control[pre_idx + 1].get_digital_gain();
+    Preamp& prea = preamps_control[pre_idx];
+    Preamp& preb = preamps_control[pre_idx + 1];
+
+    float digital_gain_1 = prea.get_digital_gain();
+    float digital_gain_2 = preb.get_digital_gain();
+
+    float* buffer_a = prea.get_audio_buffer();
+    float* buffer_b = preb.get_audio_buffer();
 
     for (int i = 0; i < len; i += 2) {
-        float sample_a = static_cast<float>(sign_extend_24_32(base[i])) * rerange_coef * digital_gain_1;
-        float sample_b = static_cast<float>(sign_extend_24_32(base[i + 1])) * rerange_coef * digital_gain_2;
-
-        k_pipe_write(&channel_audio_streams[pre_idx], (uint8_t*)&sample_a, sizeof(float), K_NO_WAIT);
-        k_pipe_write(&channel_audio_streams[pre_idx + 1], (uint8_t*)&sample_b, sizeof(float), K_NO_WAIT);
+        buffer_a[i / 2] = static_cast<float>(sign_extend_24_32(base[i])) * rerange_coef * digital_gain_1;
+        buffer_b[i / 2] = static_cast<float>(sign_extend_24_32(base[i + 1])) * rerange_coef * digital_gain_2;
     }
+
+    prea.fire_audio_packet();
+    preb.fire_audio_packet();
 }
 
-void ev_setup(const std::vector<Preamp>* preamps_control) {
-    int i = 0;
-    for (auto& p : channel_audio_streams) {
-        k_pipe_init(&p, (uint8_t*)channel_buffers[i], AUDIO_DATA_SAMPLES_PER_PACKETS * 8);
-        i++;
-    }
-
+void ev_setup(std::vector<Preamp>* preamps_control) {
     k_event_init(&packet_process_event);
 
     audio_proc_th_id = k_thread_create(
@@ -323,7 +331,7 @@ void ev_setup(const std::vector<Preamp>* preamps_control) {
     );
 }
 
-void configure_board_i2s(const std::vector<Preamp>* preamps_control) {
+void configure_board_i2s(std::vector<Preamp>* preamps_control) {
     clock_setup_i2s();
     gpio_setup();
     dma_setup();
@@ -339,8 +347,4 @@ void configure_board_i2s(const std::vector<Preamp>* preamps_control) {
     ll_i2s_clock_setup(SPI2);
     ll_i2s_clock_setup(SPI3);
     ll_i2s_clock_setup(SPI6);
-}
-
-k_pipe *get_stream(const int idx) {
-    return &channel_audio_streams[idx];
 }

@@ -2,6 +2,7 @@
 #define RACKEDIO_BOARD_FIRMWARE_PRE_H
 
 #include <cstdint>
+#include <span>
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/net/net_pkt.h>
@@ -29,7 +30,6 @@ public:
     Preamp(
         AnalogDigitalGain init_gain,
         const phy_pre_t* pre_io,
-        k_pipe* stream,
         std::shared_ptr<LowLatSocket> audio_socket,
         uint8_t channel
     );
@@ -39,7 +39,8 @@ public:
     void update_gain(float raw_gain);
     float get_digital_gain() const;
 
-    void process_stream();
+    void fire_audio_packet();
+    float* get_audio_buffer();
 private:
     AnalogDigitalGain find_gain_from_value(float raw_gain);
     void apply_to_io();
@@ -51,7 +52,6 @@ private:
 
     AnalogDigitalGain m_ad_gain_value;
     const phy_pre_t* m_pre_io;
-    k_pipe* m_stream;
 
     LowLatPacket<AudioPacket> m_packets[2];
     int m_sample_index;
