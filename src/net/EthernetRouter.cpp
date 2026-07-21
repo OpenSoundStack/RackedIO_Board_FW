@@ -59,6 +59,8 @@ extern "C" void sock_rx_service_handler(net_socket_service_event* ev) {
 
                 if (proto == EthProtocol::ETH_PROTO_OANCONTROL) {
                     router->raise_control_ev();
+                } else if (proto == EthProtocol::ETH_PROTO_OANSYNC) {
+                    router->raise_sync_ev();
                 }
 
                 break;
@@ -80,6 +82,7 @@ void EthernetRouter::init_router() {
 
     install_enet_filters();
     init_control_ev();
+    init_sync_ev();
     init_queues();
     init_raw_sock();
     init_service();
@@ -150,6 +153,18 @@ void EthernetRouter::raise_control_ev() {
 
 void EthernetRouter::wait_control_ev() {
     [[maybe_unused]] auto ev_code = k_event_wait_safe(&m_control_ev, 0x01, false, K_FOREVER);
+}
+
+void EthernetRouter::init_sync_ev() {
+    k_event_init(&m_sync_ev);
+}
+
+void EthernetRouter::raise_sync_ev() {
+    k_event_post(&m_sync_ev, 0x01);
+}
+
+void EthernetRouter::wait_sync_ev() {
+    [[maybe_unused]] auto ev_code = k_event_wait_safe(&m_sync_ev, 0x01, false, K_FOREVER);
 }
 
 void EthernetRouter::read_control_packet(LowLatPacket<ControlPacket> *pck) {

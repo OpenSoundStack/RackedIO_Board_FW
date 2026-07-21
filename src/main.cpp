@@ -13,6 +13,7 @@
 #include "audio/pre_phydef.h"
 
 #include "OpenAudioNetwork/common/NetworkMapper.h"
+#include "OpenAudioNetwork/common/ClockSlave.h"
 
 #define THREAD_DEF(name, stack_size) K_THREAD_STACK_DEFINE(name##_stack, (stack_size)); \
     k_tid_t name##_th_id; \
@@ -135,17 +136,19 @@ int main() {
         return 0;
     }
 
+    auto clk_slave = std::make_shared<ClockSlave>(pconf.uid, "", nmapper);
+
     auto audio_socket = std::make_shared<LowLatSocket>(pconf.uid, nmapper);
     audio_socket->init_socket("", EthProtocol::ETH_PROTO_OANAUDIO);
 
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, audio_socket, 0);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, audio_socket, 1);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, audio_socket, 2);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, audio_socket, 3);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, audio_socket, 4);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, audio_socket, 5);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, audio_socket, 6);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, audio_socket, 7);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, audio_socket, 0, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, audio_socket, 1, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, audio_socket, 2, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, audio_socket, 3, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, audio_socket, 4, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, audio_socket, 5, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, audio_socket, 6, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, audio_socket, 7, clk_slave);
 
     configure_board_i2s(&preamps_control);
     set_led_color(LedColor::GREEN);
@@ -157,7 +160,8 @@ int main() {
     start_i2s_all();
 
     while (true) {
-        k_usleep(10000000);
+        router->wait_sync_ev();
+        clk_slave->sync_process();
     }
 
     return 0;

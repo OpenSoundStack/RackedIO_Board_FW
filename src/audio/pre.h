@@ -11,6 +11,8 @@
 #include "src/net/EthernetRouter.h"
 
 #include <OpenAudioNetwork/common/packet_structs.h>
+#include <OpenAudioNetwork/common/ClockSlave.h>
+#include <OpenAudioNetwork/common/NetworkMapper.h>
 #include <OpenAudioNetwork/netutils/LowLatSocket.h>
 
 enum GainValue : uint8_t {
@@ -31,7 +33,8 @@ public:
         AnalogDigitalGain init_gain,
         const phy_pre_t* pre_io,
         std::shared_ptr<LowLatSocket> audio_socket,
-        uint8_t channel
+        uint8_t channel,
+        std::shared_ptr<ClockSlave> clk_slave
     );
 
     ~Preamp() = default;
@@ -47,6 +50,7 @@ private:
     void init_audio_packets();
     void send_audio_packet(int idx, uint8_t dest);
 
+    std::shared_ptr<ClockSlave> m_clk_slave;
     std::shared_ptr<LowLatSocket> m_audio_socket;
     EthernetRouter* m_router;
 

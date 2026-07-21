@@ -1,10 +1,13 @@
 #include "pre.h"
 
+#include <utility>
+
 Preamp::Preamp(
     AnalogDigitalGain init_gain,
     const phy_pre_t* pre_io,
     std::shared_ptr<LowLatSocket> audio_socket,
-    uint8_t channel
+    uint8_t channel,
+    std::shared_ptr<ClockSlave> clk_slave
 ) {
     m_ad_gain_value = init_gain;
 
@@ -16,7 +19,8 @@ Preamp::Preamp(
     m_sample_index = 0;
     m_buffer_index = 0;
 
-    m_audio_socket = audio_socket;
+    m_clk_slave = std::move(clk_slave);
+    m_audio_socket = std::move(audio_socket);
     m_channel = channel;
 
     m_router = EthernetRouter::get_eth_router();
@@ -84,6 +88,9 @@ void Preamp::init_audio_packets() {
 
 void Preamp::send_audio_packet(int idx, uint8_t dest) {
     if (m_audio_socket->write_packet_mac_addr((uint8_t*)&m_packets[idx], dest)) {
+        auto now_corrected = NetworkMapper::local_now_us() - m_clk_slave->get_ck_offset();
+        m_packets[idx].payload.header.timestamp = now_corrected;
+
         m_audio_socket->send_data_raw((char*)&m_packets[idx], sizeof(LowLatPacket<AudioPacket>));
     }
 }

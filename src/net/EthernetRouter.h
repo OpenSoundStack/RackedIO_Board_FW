@@ -44,6 +44,10 @@ public:
     void raise_control_ev();
     void wait_control_ev();
 
+    void init_sync_ev();
+    void raise_sync_ev();
+    void wait_sync_ev();
+
     void read_control_packet(LowLatPacket<ControlPacket>* pck);
 private:
     void install_enet_filters();
@@ -56,6 +60,7 @@ private:
     sockaddr_ll m_out_addr;
 
     k_event m_control_ev;
+    k_event m_sync_ev;
     net_if* m_netif;
 };
 
