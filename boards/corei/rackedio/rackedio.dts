@@ -33,14 +33,14 @@
 
 		pre1: pre1 {
 			b0 = <&gpioe 2 GPIO_ACTIVE_HIGH>;
-			b1 = <&gpioe 6 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpioe 13 GPIO_ACTIVE_HIGH>;
 			phantom = <&gpioc 13 GPIO_ACTIVE_HIGH>;
 		};
 
 		pre2: pre2 {
-			b0 = <&gpioe 4 GPIO_ACTIVE_HIGH>;
+			b0 = <&gpioe 11 GPIO_ACTIVE_HIGH>;
 			b1 = <&gpioe 3 GPIO_ACTIVE_HIGH>;
-			phantom = <&gpioe 5 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpioe 12 GPIO_ACTIVE_HIGH>;
 		};
 
 		pre3: pre3 {

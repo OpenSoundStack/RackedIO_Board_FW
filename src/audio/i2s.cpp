@@ -224,8 +224,8 @@ void start_i2s_all() {
     ll_i2s_start(&hi2s3, 2);
     k_usleep(100);
 
-    ll_i2s_start(&hi2s6, 3);
-    k_usleep(100);
+    //ll_i2s_start(&hi2s6, 3);
+    //k_usleep(100);
 }
 
 void irq_setup() {
