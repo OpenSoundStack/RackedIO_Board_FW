@@ -62,8 +62,8 @@ void Preamp::apply_to_io() {
     gpio_pin_set_dt(&m_pre_io->b1, m_ad_gain_value.analog_gain & 0x02);
 }
 
-void Preamp::fire_audio_packet() {
-    send_audio_packet(m_buffer_index, 100);
+void Preamp::fire_audio_packet(uint64_t timestamp) {
+    send_audio_packet(m_buffer_index, 100, timestamp);
     m_buffer_index = (m_buffer_index + 1) % 2;
 }
 
@@ -86,11 +86,14 @@ void Preamp::init_audio_packets() {
     }
 }
 
-void Preamp::send_audio_packet(int idx, uint8_t dest) {
+void Preamp::send_audio_packet(int idx, uint8_t dest, uint64_t timestamp) {
     if (m_audio_socket->write_packet_mac_addr((uint8_t*)&m_packets[idx], dest)) {
-        auto now_corrected = NetworkMapper::local_now_us() - m_clk_slave->get_ck_offset();
-        m_packets[idx].payload.header.timestamp = now_corrected;
+        m_packets[idx].payload.header.timestamp = timestamp;
 
         m_audio_socket->send_data_raw((char*)&m_packets[idx], sizeof(LowLatPacket<AudioPacket>));
     }
+}
+
+std::shared_ptr<ClockSlave> Preamp::get_clock_slave() {
+    return m_clk_slave;
 }

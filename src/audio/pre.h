@@ -42,13 +42,15 @@ public:
     void update_gain(float raw_gain);
     float get_digital_gain() const;
 
-    void fire_audio_packet();
+    void fire_audio_packet(uint64_t timestamp);
     float* get_audio_buffer();
+
+    std::shared_ptr<ClockSlave> get_clock_slave();
 private:
     AnalogDigitalGain find_gain_from_value(float raw_gain);
     void apply_to_io();
     void init_audio_packets();
-    void send_audio_packet(int idx, uint8_t dest);
+    void send_audio_packet(int idx, uint8_t dest, uint64_t timestamp);
 
     std::shared_ptr<ClockSlave> m_clk_slave;
     std::shared_ptr<LowLatSocket> m_audio_socket;

@@ -92,6 +92,7 @@ void gpio_setup() {
      * I2S 2 => PA11, PB10, PC2
      * I2S 3 => PC10, PC11, PA15
      * I2S 6 => PA0, PB4, PC12
+     * SAI A => PE4, PE5, PE6
      */
 
     GPIO_InitTypeDef gpio_init;
@@ -314,8 +315,9 @@ void process_buffer(uint32_t *base, size_t len, int pre_idx, std::vector<Preamp>
         buffer_b[i / 2] = static_cast<float>(sign_extend_24_32(base[i + 1])) * rerange_coef * digital_gain_2;
     }
 
-    prea.fire_audio_packet();
-    preb.fire_audio_packet();
+    auto now_corrected = NetworkMapper::local_now_us() - prea.get_clock_slave()->get_ck_offset();
+    prea.fire_audio_packet(now_corrected);
+    preb.fire_audio_packet(now_corrected);
 }
 
 void ev_setup(std::vector<Preamp>* preamps_control) {
