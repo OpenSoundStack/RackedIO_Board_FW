@@ -10,7 +10,6 @@
 #include <stm32h7xx_ll_gpio.h>
 #include <stm32h7xx_ll_bus.h>
 #include <stm32h7xx_ll_dma.h>
-#include <stm32h7xx_ll_bdma.h>
 
 #include <stm32_ll_spi.h>
 #include <stm32_ll_rcc.h>
@@ -51,9 +50,11 @@ void irq_setup();
 void ev_setup(std::vector<Preamp>* preamps_control);
 void configure_board_i2s(std::vector<Preamp>* preamps_control);
 
+void init_sai_periph(SAI_HandleTypeDef* sai_hdl, SAI_Block_TypeDef* hdl);
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef* hdl);
 void ll_i2s_clock_setup(SPI_TypeDef* hdl);
 void ll_i2s_start(I2S_HandleTypeDef* hdl, int index);
+void sai_start(SAI_HandleTypeDef* hdl, int index);
 
 void start_i2s_all();
 

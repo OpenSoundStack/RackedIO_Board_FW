@@ -1,18 +1,17 @@
 #include "i2s.h"
 
-static __nocache uint32_t dma_buff[3][I2SBoardConfig::samples_per_dma_buff];
-static __attribute__((section("SRAM4"))) uint32_t bdma_buff[I2SBoardConfig::samples_per_dma_buff];
+static __nocache uint32_t dma_buff[4][I2SBoardConfig::samples_per_dma_buff];
 static k_event packet_process_event;
 
 I2S_HandleTypeDef hi2s1;
 I2S_HandleTypeDef hi2s2;
 I2S_HandleTypeDef hi2s3;
-I2S_HandleTypeDef hi2s6;
+SAI_HandleTypeDef hsaia;
 
 DMA_HandleTypeDef hdma_i2s1;
 DMA_HandleTypeDef hdma_i2s2;
 DMA_HandleTypeDef hdma_i2s3;
-DMA_HandleTypeDef hdma_i2s6;
+DMA_HandleTypeDef hdma_saia;
 
 K_THREAD_STACK_DEFINE(audio_proc_stack, 2048);
 k_tid_t audio_proc_th_id;
@@ -37,6 +36,10 @@ void spi1_isr(void* handle) {
     HAL_I2S_IRQHandler(reinterpret_cast<I2S_HandleTypeDef *>(handle));
 }
 
+void sai_isr(void* handle) {
+    HAL_SAI_IRQHandler(reinterpret_cast<SAI_HandleTypeDef *>(handle));
+}
+
 extern "C" void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef* hdl) {
     if (hdl == &hi2s1) {
         k_event_post(&packet_process_event, I2SEvents::PRE12_EV_FULL);
@@ -44,8 +47,6 @@ extern "C" void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef* hdl) {
         k_event_post(&packet_process_event, I2SEvents::PRE34_EV_FULL);
     } else if (hdl == &hi2s3) {
         k_event_post(&packet_process_event, I2SEvents::PRE56_EV_FULL);
-    } else if (hdl == &hi2s6) {
-        k_event_post(&packet_process_event, I2SEvents::PRE78_EV_FULL);
     }
 }
 
@@ -56,9 +57,15 @@ extern "C" void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef* hdl) {
         k_event_post(&packet_process_event, I2SEvents::PRE34_EV_HALF);
     } else if (hdl == &hi2s3) {
         k_event_post(&packet_process_event, I2SEvents::PRE56_EV_HALF);
-    } else if (hdl == &hi2s6) {
-        k_event_post(&packet_process_event, I2SEvents::PRE78_EV_HALF);
     }
+}
+
+extern "C" void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai) {
+    k_event_post(&packet_process_event, I2SEvents::PRE78_EV_FULL);
+}
+
+extern "C" void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai) {
+    k_event_post(&packet_process_event, I2SEvents::PRE78_EV_HALF);
 }
 
 void clock_setup_i2s() {
@@ -73,12 +80,14 @@ void clock_setup_i2s() {
     clk_init.PeriphClockSelection = RCC_PERIPHCLK_SPI3;
     HAL_RCCEx_PeriphCLKConfig(&clk_init);
 
-    __HAL_RCC_SPI6_CONFIG((RCC_D3CCIPR_SPI6SEL_1 | RCC_D3CCIPR_SPI6SEL_2)); // SPI6 CLK to I2S Clk
+    clk_init.PeriphClockSelection = RCC_PERIPHCLK_SAI1;
+    clk_init.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PIN;
+    HAL_RCCEx_PeriphCLKConfig(&clk_init);
 
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_SPI2_CLK_ENABLE();
     __HAL_RCC_SPI3_CLK_ENABLE();
-    __HAL_RCC_SPI6_CLK_ENABLE();
+    __HAL_RCC_SAI1_CLK_ENABLE();
 }
 
 void gpio_setup() {
@@ -137,9 +146,17 @@ void gpio_setup() {
     gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
     gpio_init.Alternate = GPIO_AF5_SPI1;
     HAL_GPIO_Init(GPIOB, &gpio_init);
+
+    gpio_init.Pin = GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF6_SAI1;
+    HAL_GPIO_Init(GPIOE, &gpio_init);
 }
 
-static void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, I2S_HandleTypeDef* i2s) {
+template<class T>
+void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hdl, T* periph_hdl) {
     hdl.Instance = dma;
     hdl.Init.Request = rq;
     hdl.Init.Direction = DMA_PERIPH_TO_MEMORY;
@@ -152,18 +169,16 @@ static void init_link_dma(DMA_Stream_TypeDef* dma, int rq, DMA_HandleTypeDef& hd
     hdl.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     HAL_DMA_Init(&hdl);
 
-    __HAL_LINKDMA(i2s, hdmarx, hdl);
+    __HAL_LINKDMA(periph_hdl, hdmarx, hdl);
 }
 
 void dma_setup() {
     __HAL_RCC_DMA1_CLK_ENABLE();
-    __HAL_RCC_BDMA_CLK_ENABLE();
 
     init_link_dma(DMA1_Stream0, DMA_REQUEST_SPI1_RX, hdma_i2s1, &hi2s1);
     init_link_dma(DMA1_Stream1, DMA_REQUEST_SPI2_RX, hdma_i2s2, &hi2s2);
     init_link_dma(DMA1_Stream2, DMA_REQUEST_SPI3_RX, hdma_i2s3, &hi2s3);
-    init_link_dma((DMA_Stream_TypeDef*)BDMA_Channel0, BDMA_REQUEST_SPI6_RX, hdma_i2s6, &hi2s6);
-    //init_link_bdma(LL_BDMA_CHANNEL_0, BDMA_REQUEST_SPI6_RX, hdma_i2s6, &hi2s6);
+    init_link_dma(DMA1_Stream3, DMA_REQUEST_SAI1_A, hdma_saia, &hsaia);
 }
 
 void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
@@ -180,14 +195,21 @@ void init_i2s_periph(I2S_HandleTypeDef* i2s_hdl, SPI_TypeDef *hdl) {
     i2s_hdl->Init.MasterKeepIOState = I2S_MASTER_KEEP_IO_STATE_DISABLE;
 
     HAL_I2S_Init(i2s_hdl);
+}
 
-    // Forcing some parameter because of ST HAL bugs
-    if (hdl == SPI6) {
-        LL_I2S_SetTransferMode(SPI6, LL_I2S_MODE_MASTER_RX);
-        LL_I2S_SetStandard(SPI6, LL_I2S_STANDARD_MSB);
-        LL_I2S_SetDataFormat(SPI6, LL_I2S_DATAFORMAT_24B);
-        LL_I2S_SetClockPolarity(SPI6, LL_I2S_POLARITY_LOW);
-    }
+void init_sai_periph(SAI_HandleTypeDef *sai_hdl, SAI_Block_TypeDef *hdl) {
+    sai_hdl->Instance = hdl;
+    sai_hdl->Init.AudioMode = SAI_MODEMASTER_RX;
+    sai_hdl->Init.Synchro = SAI_ASYNCHRONOUS;
+    sai_hdl->Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLED;
+    sai_hdl->Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
+    sai_hdl->Init.FIFOThreshold = SAI_FIFOTHRESHOLD_EMPTY;
+    sai_hdl->Init.AudioFrequency = SAI_AUDIO_FREQUENCY_22K; // For some obscure reasons it forces the SAI block to work at 96kHz
+    sai_hdl->Init.SynchroExt = SAI_SYNCEXT_DISABLE;
+    sai_hdl->Init.MonoStereoMode = SAI_STEREOMODE;
+    sai_hdl->Init.CompandingMode = SAI_NOCOMPANDING;
+
+    HAL_SAI_InitProtocol(sai_hdl, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2);
 }
 
 void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
@@ -204,11 +226,11 @@ void ll_i2s_clock_setup(SPI_TypeDef *hdl) {
 }
 
 void ll_i2s_start(I2S_HandleTypeDef *hdl, int index) {
-    if (hdl->Instance == SPI6) {
-        HAL_I2S_Receive_DMA(hdl, (uint16_t*)bdma_buff, 64*4);
-    } else {
-        HAL_I2S_Receive_DMA(hdl, (uint16_t*)dma_buff[index], 64*4);
-    }
+    HAL_I2S_Receive_DMA(hdl, (uint16_t*)dma_buff[index], 64*4);
+}
+
+void sai_start(SAI_HandleTypeDef *hdl, int index) {
+    HAL_SAI_Receive_DMA(hdl, (uint8_t*)dma_buff[index], 64*4);
 }
 
 void start_i2s_all() {
@@ -225,8 +247,7 @@ void start_i2s_all() {
     ll_i2s_start(&hi2s3, 2);
     k_usleep(100);
 
-    //ll_i2s_start(&hi2s6, 3);
-    //k_usleep(100);
+    sai_start(&hsaia, 3);
 }
 
 void irq_setup() {
@@ -239,8 +260,8 @@ void irq_setup() {
     IRQ_CONNECT(DMA1_Stream2_IRQn, 0, dma_isr, &hdma_i2s3, 0);
     irq_enable(DMA1_Stream2_IRQn);
 
-    IRQ_CONNECT(BDMA_Channel0_IRQn, 0, dma_isr, &hdma_i2s6, 0);
-    irq_enable(BDMA_Channel0_IRQn);
+    IRQ_CONNECT(DMA1_Stream3_IRQn, 0, dma_isr, &hdma_saia, 0);
+    irq_enable(DMA1_Stream3_IRQn);
 
     IRQ_CONNECT(SPI1_IRQn, 0, spi1_isr, &hi2s1, 0);
     irq_enable(SPI1_IRQn);
@@ -251,8 +272,8 @@ void irq_setup() {
     IRQ_CONNECT(SPI3_IRQn, 0, spi1_isr, &hi2s3, 0);
     irq_enable(SPI3_IRQn);
 
-    IRQ_CONNECT(SPI6_IRQn, 0, spi1_isr, &hi2s6, 0);
-    irq_enable(SPI6_IRQn);
+    IRQ_CONNECT(SAI1_IRQn, 0, sai_isr, &hsaia, 0);
+    irq_enable(SAI1_IRQn);
 }
 
 static void audio_processor_entry(void* ev, void* pre, void*) {
@@ -289,11 +310,11 @@ static void audio_processor_entry(void* ev, void* pre, void*) {
         }
 
         if (evcode & I2SEvents::PRE78_EV_HALF) {
-            process_buffer(bdma_buff, buffer_size, 6, preamps);
+            process_buffer(dma_buff[3], buffer_size, 6, preamps);
         }
 
         if (evcode & I2SEvents::PRE78_EV_FULL) {
-            process_buffer(bdma_buff + buffer_size, buffer_size, 6, preamps);
+            process_buffer(dma_buff[3] + buffer_size, buffer_size, 6, preamps);
         }
     }
 }
@@ -343,10 +364,9 @@ void configure_board_i2s(std::vector<Preamp>* preamps_control) {
     init_i2s_periph(&hi2s1, SPI1);
     init_i2s_periph(&hi2s2, SPI2);
     init_i2s_periph(&hi2s3, SPI3);
-    init_i2s_periph(&hi2s6, SPI6);
+    init_sai_periph(&hsaia, SAI1_Block_A);
 
     ll_i2s_clock_setup(SPI1);
     ll_i2s_clock_setup(SPI2);
     ll_i2s_clock_setup(SPI3);
-    ll_i2s_clock_setup(SPI6);
 }

@@ -147,8 +147,9 @@ int main() {
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre4, audio_socket, 3, clk_slave);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre5, audio_socket, 4, clk_slave);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre6, audio_socket, 5, clk_slave);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, audio_socket, 6, clk_slave);
-    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, audio_socket, 7, clk_slave);
+    // For some reasons the SAI block invert the stereo channels, hence this hack
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre8, audio_socket, 6, clk_slave);
+    preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre7, audio_socket, 7, clk_slave);
 
     configure_board_i2s(&preamps_control);
     set_led_color(LedColor::GREEN);

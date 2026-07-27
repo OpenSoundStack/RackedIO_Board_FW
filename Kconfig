@@ -8,6 +8,7 @@ config APP_LINK_STM32_DRIVERS
     select USE_STM32_HAL_SPI
     select USE_STM32_LL_SPI
     select USE_STM32_LL_DMA
-    select USE_STM32_LL_BDMA
     select USE_STM32_HAL_DMA
     select USE_STM32_HAL_I2S
+    select USE_STM32_HAL_SAI
+    select USE_STM32_LL_SAI
