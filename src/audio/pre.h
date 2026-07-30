@@ -42,6 +42,8 @@ public:
     void update_gain(float raw_gain);
     float get_digital_gain() const;
 
+    void set_48v(bool value);
+
     void fire_audio_packet(uint64_t timestamp);
     float* get_audio_buffer();
 

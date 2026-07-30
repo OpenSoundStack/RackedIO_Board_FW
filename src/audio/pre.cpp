@@ -97,3 +97,7 @@ void Preamp::send_audio_packet(int idx, uint8_t dest, uint64_t timestamp) {
 std::shared_ptr<ClockSlave> Preamp::get_clock_slave() {
     return m_clk_slave;
 }
+
+void Preamp::set_48v(bool value) {
+    gpio_pin_set_dt(&m_pre_io->en_48v, value);
+}
