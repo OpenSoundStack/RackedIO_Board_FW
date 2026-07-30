@@ -41,6 +41,11 @@ phy_pre_t pre8 = DT_GET_PREAMP(pre8);
 
 std::vector<Preamp> preamps_control;
 
+struct PreampControl {
+    float raw_gain;
+    bool en_48v;
+} __attribute__((packed));
+
 void mapper_entry(void* mapper, void*, void*) {
     NetworkMapper* nmapper = reinterpret_cast<NetworkMapper*>(mapper);
 
@@ -78,10 +83,12 @@ void process_gain(const LowLatPacket<ControlPacket>* pck) {
         return;
     }
 
-    volatile float raw_gain = 0.0f;
-    memcpy((void*)&raw_gain, &pck->payload.packet_data.data[0], sizeof(float));
+    PreampControl pctrl{};
+    memcpy((void*)&pctrl, &pck->payload.packet_data.data[0], sizeof(PreampControl));
 
-    preamps_control[pck->payload.packet_data.channel].update_gain(raw_gain);
+    Preamp& pre = preamps_control[pck->payload.packet_data.channel];
+    pre.update_gain(pctrl.raw_gain);
+    pre.set_48v(pctrl.en_48v);
 }
 
 void control_handler_entry(void* self_conf, void*, void*) {
@@ -102,7 +109,7 @@ void control_handler_entry(void* self_conf, void*, void*) {
         router->read_control_packet(&local_packet);
         if ((local_packet.llhdr.dest_uid == pconf->uid) &&
             (local_packet.payload.header.type == PacketType::CONTROL) &&
-            (local_packet.payload.packet_data.control_type == DataTypes::FLOAT)
+            (local_packet.payload.packet_data.control_type == DataTypes::CUSTOM)
         ) {
             process_gain(&local_packet);
         }
