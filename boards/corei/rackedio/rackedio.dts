@@ -33,19 +33,19 @@
 
 		pre1: pre1 {
 			b0 = <&gpioe 2 GPIO_ACTIVE_HIGH>;
-			b1 = <&gpioe 13 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpioa 0 GPIO_ACTIVE_HIGH>;
 			phantom = <&gpioc 13 GPIO_ACTIVE_HIGH>;
 		};
 
 		pre2: pre2 {
-			b0 = <&gpioe 11 GPIO_ACTIVE_HIGH>;
+			b0 = <&gpioc 15 GPIO_ACTIVE_HIGH>;
 			b1 = <&gpioe 3 GPIO_ACTIVE_HIGH>;
-			phantom = <&gpioe 12 GPIO_ACTIVE_HIGH>;
+			phantom = <&gpioa 3 GPIO_ACTIVE_HIGH>;
 		};
 
 		pre3: pre3 {
-			b0 = <&gpiod 1 GPIO_ACTIVE_HIGH>;
-			b1 = <&gpiod 0 GPIO_ACTIVE_HIGH>;
+			b0 = <&gpioc 12 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpiob 5 GPIO_ACTIVE_HIGH>;
 			phantom = <&gpioe 0 GPIO_ACTIVE_HIGH>;
 		};
 
@@ -62,8 +62,8 @@
 		};
 
 		pre6: pre6 {
-			b0 = <&gpiod 6 GPIO_ACTIVE_HIGH>;
-			b1 = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+			b0 = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+			b1 = <&gpiod 6 GPIO_ACTIVE_HIGH>;
 			phantom = <&gpiod 7 GPIO_ACTIVE_HIGH>;
 		};
 
