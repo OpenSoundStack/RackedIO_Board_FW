@@ -81,8 +81,8 @@ void Preamp::init_audio_packets() {
 
         m_audio_socket->format_packet_header((uint8_t*)&m_packets[i], 0, sizeof(LowLatPacket<AudioPacket>));
 
-        m_packets[i].payload.packet_data.channel = m_channel;
-        m_packets[i].payload.packet_data.source_channel = 0;
+        m_packets[i].payload.packet_data.channel = 0;
+        m_packets[i].payload.packet_data.source_channel = m_channel;
     }
 }
 
