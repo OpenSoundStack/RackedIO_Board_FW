@@ -91,12 +91,15 @@ void process_gain(const LowLatPacket<ControlPacket>* pck) {
     pre.set_48v(pctrl.en_48v);
 }
 
-void process_routing(const LowLatPacket<ControlRoutePacket>* pck) {
+ControlResponseCode process_routing(const LowLatPacket<ControlRoutePacket>* pck) {
+    ControlResponseCode code = ControlResponseCode::ROUTE_OK;
+
     switch (pck->payload.packet_data.cmd) {
         case CTRL_ROUTE_UNKNOWN_CMD:
             break;
         case CTRL_ROUTE_CREATE_OUTBOUND:
             set_led_color(LedColor::BLUE);
+            preamps_control[pck->payload.packet_data.source_channel].set_routed_uid(pck->payload.packet_data.dest_device_uid);
             break;
         case CTRL_ROUTE_DELETE_OUTBOUND:
             break;
@@ -106,15 +109,26 @@ void process_routing(const LowLatPacket<ControlRoutePacket>* pck) {
         case CTRL_ROUTE_DELETE_INBOUND:
             break;
         case CTRL_ROUTE_CLEAR_ALL:
+            for (auto& p : preamps_control) {
+                p.clear_routing();
+            }
             break;
         default:
             break;
     }
+
+    return code;
 }
 
-void control_handler_entry(void* self_conf, void*, void*) {
+void control_handler_entry(void* self_conf, void* lls, void*) {
     auto* pconf = reinterpret_cast<PeerConf*>(self_conf);
     auto* router = EthernetRouter::get_eth_router();
+    auto* control_lls = (LowLatSocket*)lls;
+
+    static LowLatPacket<ControlResponsePacket> resp_pck;
+
+    resp_pck.payload.header.type = PacketType::CONTROL_RESPONSE;
+    resp_pck.payload.packet_data.channel = 0;
 
     while (true) {
         router->wait_control_ev();
@@ -139,7 +153,12 @@ void control_handler_entry(void* self_conf, void*, void*) {
             router->read_packet<LowLatPacket<ControlRoutePacket>, EthProtocol::ETH_PROTO_OANCONTROL>(&local_packet);
 
             if (local_packet.llhdr.dest_uid == pconf->uid) {
-                process_routing(&local_packet);
+                auto resp = process_routing(&local_packet);
+
+                resp_pck.payload.packet_data.response = resp;
+                resp_pck.payload.packet_data.pid = local_packet.payload.packet_data.transaction_id;
+                control_lls->format_packet_header((uint8_t*)&resp_pck, local_packet.llhdr.sender_uid, sizeof(LowLatPacket<ControlResponsePacket>));
+                control_lls->send_data_raw((char*)&resp_pck, sizeof(LowLatPacket<ControlResponsePacket>));
             }
         }
     }
@@ -152,7 +171,7 @@ int main() {
     EthernetRouter* router = EthernetRouter::get_eth_router();
     router->init_router();
 
-    char dev_name[32] = "Core I Racked IO";
+    char dev_name[32] = "Racked IO";
 
     PeerConf pconf{};
     pconf.ck_type = CKTYPE_SLAVE;
@@ -177,6 +196,9 @@ int main() {
     auto audio_socket = std::make_shared<LowLatSocket>(pconf.uid, nmapper);
     audio_socket->init_socket("", EthProtocol::ETH_PROTO_OANAUDIO);
 
+    auto control_socket = std::make_shared<LowLatSocket>(pconf.uid, nmapper);
+    control_socket->init_socket("", EthProtocol::ETH_PROTO_OANCONTROL);
+
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre1, audio_socket, 0, clk_slave);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre2, audio_socket, 1, clk_slave);
     preamps_control.emplace_back(AnalogDigitalGain{GainValue::GAIN_1, 1.0f}, &pre3, audio_socket, 2, clk_slave);
@@ -191,7 +213,7 @@ int main() {
     set_led_color(LedColor::GREEN);
 
     THREAD_START(mapper, mapper_entry, nmapper.get(), nullptr, nullptr, 15);
-    THREAD_START(control_handler, control_handler_entry, &pconf, nullptr, nullptr, 5);
+    THREAD_START(control_handler, control_handler_entry, &pconf, control_socket.get(), nullptr, 5);
     THREAD_START(life, life_entry, nullptr, nullptr, nullptr, 20);
 
     start_i2s_all();

@@ -25,6 +25,9 @@ Preamp::Preamp(
 
     m_router = EthernetRouter::get_eth_router();
 
+    m_routed_uid = 0;
+    m_routing_cleared = true;
+
     init_audio_packets();
 }
 
@@ -63,7 +66,10 @@ void Preamp::apply_to_io() {
 }
 
 void Preamp::fire_audio_packet(uint64_t timestamp) {
-    send_audio_packet(m_buffer_index, 100, timestamp);
+    if (!m_routing_cleared) {
+        send_audio_packet(m_buffer_index, m_routed_uid, timestamp);
+    }
+
     m_buffer_index = (m_buffer_index + 1) % 2;
 }
 
@@ -100,4 +106,14 @@ std::shared_ptr<ClockSlave> Preamp::get_clock_slave() {
 
 void Preamp::set_48v(bool value) {
     gpio_pin_set_dt(&m_pre_io->en_48v, value);
+}
+
+void Preamp::set_routed_uid(uint16_t routed_uid) {
+    m_routed_uid = routed_uid;
+    m_routing_cleared = false;
+}
+
+void Preamp::clear_routing() {
+    m_routed_uid = 0;
+    m_routing_cleared = true;
 }

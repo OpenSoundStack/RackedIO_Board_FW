@@ -48,11 +48,17 @@ public:
     float* get_audio_buffer();
 
     std::shared_ptr<ClockSlave> get_clock_slave();
+
+    void set_routed_uid(uint16_t routed_uid);
+    void clear_routing();
 private:
     AnalogDigitalGain find_gain_from_value(float raw_gain);
     void apply_to_io();
     void init_audio_packets();
     void send_audio_packet(int idx, uint8_t dest, uint64_t timestamp);
+
+    bool m_routing_cleared;
+    uint16_t m_routed_uid;
 
     std::shared_ptr<ClockSlave> m_clk_slave;
     std::shared_ptr<LowLatSocket> m_audio_socket;
