@@ -18,10 +18,14 @@ void RingBuffer::push_on_buffer(uint8_t *data, size_t len) {
 }
 
 DataPtr RingBuffer::pop_from_buffer() {
-    auto data =  m_buffers[m_buffer_cursor];
+    auto data = m_buffers[m_buffer_cursor];
     m_buffer_cursor = (m_buffer_cursor + 1) % m_ring_size;
 
     return data;
+}
+
+DataPtr RingBuffer::peek_from_buffer() {
+    return m_buffers[m_buffer_cursor];
 }
 
 void RingBuffer::alloc_buffer(uint16_t buffer_size, uint16_t ring_size) {

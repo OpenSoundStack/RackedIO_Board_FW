@@ -19,6 +19,7 @@
 #include "RingBuffer.h"
 
 extern "C" void eth_filtering_setup(); // C/C++ compat issue
+extern "C" int _recv_data(uint8_t* data_out, size_t data_size, EthProtocol proto);
 
 class EthernetRouter {
 public:
@@ -48,7 +49,16 @@ public:
     void raise_sync_ev();
     void wait_sync_ev();
 
-    void read_control_packet(LowLatPacket<ControlPacket>* pck);
+    template<class T, EthProtocol queue>
+    bool read_packet(T* pck) {
+        return _recv_data(
+            reinterpret_cast<uint8_t*>(pck),
+            sizeof(LowLatPacket<ControlPacket>),
+            queue
+        ) > 0;
+    }
+
+    PacketType seek_control_packet_type();
 private:
     void install_enet_filters();
     void init_raw_sock();

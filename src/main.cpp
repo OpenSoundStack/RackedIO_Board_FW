@@ -91,10 +91,30 @@ void process_gain(const LowLatPacket<ControlPacket>* pck) {
     pre.set_48v(pctrl.en_48v);
 }
 
+void process_routing(const LowLatPacket<ControlRoutePacket>* pck) {
+    switch (pck->payload.packet_data.cmd) {
+        case CTRL_ROUTE_UNKNOWN_CMD:
+            break;
+        case CTRL_ROUTE_CREATE_OUTBOUND:
+            set_led_color(LedColor::BLUE);
+            break;
+        case CTRL_ROUTE_DELETE_OUTBOUND:
+            break;
+        case CTRL_ROUTE_CREATE_INBOUND:
+            set_led_color(LedColor::GREEN);
+            break;
+        case CTRL_ROUTE_DELETE_INBOUND:
+            break;
+        case CTRL_ROUTE_CLEAR_ALL:
+            break;
+        default:
+            break;
+    }
+}
+
 void control_handler_entry(void* self_conf, void*, void*) {
     auto* pconf = reinterpret_cast<PeerConf*>(self_conf);
     auto* router = EthernetRouter::get_eth_router();
-    static LowLatPacket<ControlPacket> local_packet;
 
     while (true) {
         router->wait_control_ev();
@@ -106,12 +126,21 @@ void control_handler_entry(void* self_conf, void*, void*) {
         // because we only need to read those
         // packets
 
-        router->read_control_packet(&local_packet);
-        if ((local_packet.llhdr.dest_uid == pconf->uid) &&
-            (local_packet.payload.header.type == PacketType::CONTROL) &&
-            (local_packet.payload.packet_data.control_type == DataTypes::CUSTOM)
-        ) {
-            process_gain(&local_packet);
+        auto ptype = router->seek_control_packet_type();
+        if (ptype == PacketType::CONTROL) {
+            static LowLatPacket<ControlPacket> local_packet;
+            router->read_packet<LowLatPacket<ControlPacket>, EthProtocol::ETH_PROTO_OANCONTROL>(&local_packet);
+
+            if ((local_packet.payload.packet_data.control_type == DataTypes::CUSTOM) && (local_packet.llhdr.dest_uid == pconf->uid)) {
+                process_gain(&local_packet);
+            }
+        } else if (ptype == PacketType::CONTROL_ROUTING) {
+            static LowLatPacket<ControlRoutePacket> local_packet;
+            router->read_packet<LowLatPacket<ControlRoutePacket>, EthProtocol::ETH_PROTO_OANCONTROL>(&local_packet);
+
+            if (local_packet.llhdr.dest_uid == pconf->uid) {
+                process_routing(&local_packet);
+            }
         }
     }
 }

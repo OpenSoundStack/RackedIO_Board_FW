@@ -18,6 +18,7 @@ public:
 
     void push_on_buffer(uint8_t* data, size_t len);
     DataPtr pop_from_buffer();
+    DataPtr peek_from_buffer();
 
     EthProtocol get_filt_proto();
 

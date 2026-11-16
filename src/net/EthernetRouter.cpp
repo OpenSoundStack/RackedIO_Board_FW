@@ -167,10 +167,10 @@ void EthernetRouter::wait_sync_ev() {
     [[maybe_unused]] auto ev_code = k_event_wait_safe(&m_sync_ev, 0x01, false, K_FOREVER);
 }
 
-void EthernetRouter::read_control_packet(LowLatPacket<ControlPacket> *pck) {
-    _recv_data(
-        reinterpret_cast<uint8_t*>(pck),
-        sizeof(LowLatPacket<ControlPacket>),
-        EthProtocol::ETH_PROTO_OANCONTROL
-    );
+PacketType EthernetRouter::seek_control_packet_type() {
+    RingBuffer& queue = eth_global_queue_buffers[2];
+    DataPtr buff = queue.peek_from_buffer();
+
+    auto* hdr = reinterpret_cast<LowLatPacket<CommonHeader>*>(buff.ptr);
+    return hdr->payload.type;
 }
